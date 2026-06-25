@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <head>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      // transpile a single file and return the resulting JS source
+      async function transpile(path) {
+        const response = await fetch(path);
+        const source = await response.text();
+
+        const { code } = Babel.transform(source, {
+          presets: [
+            "typescript",
+            ["react", { runtime: "classic", pragma: "Didact.createElement" }],
+          ],
+          filename: path,
+        });
+
+        return code;
+      }
+
+      // turn a JS source string into something the browser can import()
+
+      // import() needs a URL to fetch from — it can't import a raw string directly.
+      // So this function fakes a URL for a string that only exists in memory.
+      function toModuleUrl(code) {
+        const blob = new Blob([code], { type: "text/javascript" });
+        return URL.createObjectURL(blob);
+      }
+
+      async function loadApp() {
+        const didactCode = await transpile("./didact.tsx");
+        const didactUrl = toModuleUrl(didactCode);
+
+        // a bundler rewrites "./didact" to the right module reference;
+        // here we do that exact rewrite by hand, with a plain string replace
+        const mainCodeRaw = await transpile("./main.tsx");
+        const mainCode = mainCodeRaw.replace("./didact", didactUrl);
+
+        // this could have been
+
+        // const script = document.createElement("script");
+        // script.type = "module"; // this is the part that changes everything
+        // script.textContent = mainCode;
+        // document.body.appendChild(script);
+
+        const mainUrl = toModuleUrl(mainCode);
+
+        await import(mainUrl);
+      }
+
+      loadApp();
+    </script>
+  </body>
+</html>
