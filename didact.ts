@@ -30,10 +30,7 @@ export const createTextElement = (child: string | number) => ({
   props: { nodeValue: child, children: [] },
 });
 
-export function render(
-  element: DidactElement,
-  container: HTMLElement | Text,
-): void {
+export function render(element: DidactElement, container: HTMLElement): void {
   if (element.type === "TEXT_ELEMENT") {
     const dom = document.createTextNode(String(element.props.nodeValue));
     container.appendChild(dom);
