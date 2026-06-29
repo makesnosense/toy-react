@@ -34,12 +34,18 @@
       }
 
       async function loadApp() {
-        const didactCode = await transpile("./didact.tsx");
+        const didactCode = await transpile("./didact.ts");
         const didactUrl = toModuleUrl(didactCode);
 
         // a bundler rewrites "./didact" to the right module reference;
         // here we do that exact rewrite by hand, with a plain string replace
         const mainCodeRaw = await transpile("./main.tsx");
+        console.log(
+          "\n\n",
+          "main.tsx code after transpilation:\n\n",
+          mainCodeRaw,
+          "\n\n",
+        );
         const mainCode = mainCodeRaw.replace("./didact", didactUrl);
 
         // this could have been
