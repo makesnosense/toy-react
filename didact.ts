@@ -44,6 +44,7 @@ export function render(element: DidactElement, container: HTMLElement): void {
   Object.keys(element.props)
     .filter(isProp)
     .forEach((name) => {
+      // @ts-expect-error — dynamic prop assignment, to revisit later
       dom[name] = element.props[name];
     });
 
