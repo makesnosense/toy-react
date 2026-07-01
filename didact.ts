@@ -23,10 +23,12 @@ interface Fiber {
 }
 
 let nextUnitOfWork: Fiber | null = null;
+let wipRootFiber: Fiber | null = null;
+
 let workLoopStarted = false;
 
 export function render(element: DidactElement, container: HTMLElement): void {
-  const rootFiber = {
+  wipRootFiber = {
     type: ROOT_FIBER_TYPE,
     dom: container,
     props: {
@@ -37,7 +39,7 @@ export function render(element: DidactElement, container: HTMLElement): void {
     sibling: null,
   };
 
-  nextUnitOfWork = rootFiber;
+  nextUnitOfWork = wipRootFiber;
 
   if (!workLoopStarted) {
     workLoopStarted = true;
@@ -51,6 +53,10 @@ function workLoop(deadline: IdleDeadline): void {
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     shouldYield = deadline.timeRemaining() < 1;
+  }
+
+  if (!nextUnitOfWork && wipRootFiber) {
+    commitRootFiber();
   }
 
   requestIdleCallback(workLoop);
@@ -132,6 +138,37 @@ function performUnitOfWork(fiber: Fiber): Fiber | null {
   }
 
   return null;
+}
+
+function commitRootFiber(): void {
+  if (!wipRootFiber) return;
+  commitFiber(wipRootFiber.child);
+  wipRootFiber = null;
+}
+
+function commitFiber(fiber: Fiber | null): void {
+  if (!fiber) {
+    return;
+  }
+
+  if (!fiber.parent || !fiber.parent.dom) {
+    // shall never happen cause only fiber with no parent is rootFiber
+    throw new Error(
+      "commitFiber called on a fiber with no parent dom (the root fiber?)",
+    );
+  }
+
+  const parentFiberDom = fiber.parent.dom;
+
+  if (fiber.dom) {
+    // every fiber currently has a dom, since only host components exist so
+    // far — createDom() runs unconditionally for them. this check becomes
+    // load-bearing once function components (no dom by design) exist.
+    parentFiberDom.appendChild(fiber.dom);
+  }
+
+  commitFiber(fiber.child);
+  commitFiber(fiber.sibling);
 }
 
 // babel compiles jsx into calls to this function, per the pragma
