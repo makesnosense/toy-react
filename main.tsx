@@ -2,7 +2,9 @@ import * as Didact from "./didact";
 
 const element = (
   <div>
-    <h1 title="foo">Hello world</h1>
+    <h1 title="foo">
+      Hello <span>sick sad</span> world
+    </h1>
     <h2>dddd</h2>
   </div>
 );
