@@ -10,7 +10,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": ["*.ts", "*.tsx"]
 }
