@@ -16,3 +16,7 @@ const root = document.getElementById("root");
 if (root) {
   Didact.render(element, root);
 }
+
+// exposes Didact for manual console testing
+(window as any).Didact = Didact;
+(window as any).container = root;
