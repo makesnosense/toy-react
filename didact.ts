@@ -1,7 +1,9 @@
 export type ObjectValues<T> = T[keyof T];
 
+type DidactFunctionComponent = (props: DidactElementProps) => DidactElement;
+
 interface DidactElement {
-  type: string;
+  type: string | DidactFunctionComponent;
   props: DidactElementProps;
 }
 
@@ -25,6 +27,8 @@ interface Fiber {
   alternate: Fiber | null;
   effectTag: EffectTag | null;
 }
+
+type FiberWithDom = Fiber & { dom: NonNullable<Fiber["dom"]> };
 
 const EFFECT_TAG = {
   UPDATE: "UPDATE",
@@ -81,17 +85,15 @@ function workLoop(deadline: IdleDeadline): void {
 }
 
 function performUnitOfWork(wipFiber: Fiber): Fiber | null {
-  // 1. create DOM for this fiber if it doesn't have one yet
-  if (!wipFiber.dom) {
-    wipFiber.dom = createDom(wipFiber);
+  const isFunctionComponent = typeof wipFiber.type === "function";
+
+  if (isFunctionComponent) {
+    updateFunctionComponent(wipFiber);
+  } else {
+    updateHostComponent(wipFiber);
   }
 
-  // 2. build fibers for this fiber's child elements
-  const childElements = wipFiber.props.children;
-
-  reconcileChildren(wipFiber, childElements);
-
-  // 3.  return whichever fiber should be visited next
+  // return whichever fiber should be visited next
 
   if (wipFiber.child) {
     return wipFiber.child;
@@ -112,6 +114,30 @@ function performUnitOfWork(wipFiber: Fiber): Fiber | null {
   }
 
   return null;
+}
+
+function updateFunctionComponent(wipFiber: Fiber) {
+  if (typeof wipFiber.type !== "function") {
+    // shall never happen — performUnitOfWork only dispatches here for function-typed fibers
+    throw new Error(
+      "updateFunctionComponent called on a fiber whose type is not a function",
+    );
+  }
+
+  const childElements = [wipFiber.type(wipFiber.props)];
+
+  // build fibers for this fiber's child elements
+  reconcileChildren(wipFiber, childElements);
+}
+
+function updateHostComponent(wipFiber: Fiber) {
+  // create DOM for this fiber if it doesn't have one yet
+  if (!wipFiber.dom) {
+    wipFiber.dom = createDom(wipFiber);
+  }
+
+  // build fibers for this fiber's child elements
+  reconcileChildren(wipFiber, wipFiber.props.children);
 }
 
 function reconcileChildren(
@@ -211,6 +237,12 @@ function createDom(fiber: Fiber): HTMLElement | Text {
   if (fiber.type === "TEXT_ELEMENT") {
     return document.createTextNode(String(fiber.props.nodeValue));
   }
+
+  if (typeof fiber.type !== "string") {
+    // shall never happen — createDom is only called for host fibers, whose type is always a tag name string
+    throw new Error("createDom called on a fiber whose type is not a string");
+  }
+
   const dom = document.createElement(fiber.type);
   updateDom(dom, { children: [] }, fiber.props);
   return dom;
@@ -287,14 +319,7 @@ function commitFiber(fiber: Fiber | null): void {
     return;
   }
 
-  if (!fiber.parent || !fiber.parent.dom) {
-    // shall never happen cause only fiber with no parent is rootFiber
-    throw new Error(
-      "commitFiber called on a fiber with no parent dom (the root fiber?)",
-    );
-  }
-
-  const parentFiberDom = fiber.parent.dom;
+  const ancestorFiberWithDom = findAncestorFiberWithDom(fiber.parent);
 
   // known limitation: appendChild always inserts at the end of the parent's
   // current children, with no regard for this fiber's position among its
@@ -303,12 +328,18 @@ function commitFiber(fiber: Fiber | null): void {
   // the newly placed node lands after it instead of at its correct index.
 
   if (fiber.effectTag === EFFECT_TAG.PLACEMENT && fiber.dom) {
-    // every fiber currently has a dom, since only host components exist so
-    // far — createDom() runs unconditionally for them. this check becomes
-    // load-bearing once function components (no dom by design) exist.
-    parentFiberDom.appendChild(fiber.dom);
+    // function-component fibers never get a dom (see updateFunctionComponent)
+    ancestorFiberWithDom.dom.appendChild(fiber.dom);
   } else if (fiber.effectTag === EFFECT_TAG.UPDATE && fiber.dom) {
-    updateDom(fiber.dom, fiber.alternate!.props, fiber.props);
+    if (!fiber.alternate) {
+      // shall never happen — createChildFiber only tags UPDATE together with
+      // setting alternate to the matched old fiber
+      throw new Error(
+        "commitFiber found an UPDATE-tagged fiber with no alternate",
+      );
+    }
+
+    updateDom(fiber.dom, fiber.alternate.props, fiber.props);
   }
 
   commitFiber(fiber.child);
@@ -316,23 +347,35 @@ function commitFiber(fiber: Fiber | null): void {
 }
 
 function commitFiberDeletion(fiber: Fiber): void {
-  if (!fiber.parent || !fiber.parent.dom) {
-    throw new Error(
-      "commitFiberDeletion called on a fiber with no parent dom (the root fiber?)",
-    );
-  }
-  const parentFiberDom = fiber.parent.dom;
+  const ancestorFiberWithDom = findAncestorFiberWithDom(fiber.parent);
 
   if (fiber.dom) {
-    parentFiberDom.removeChild(fiber.dom);
+    ancestorFiberWithDom.dom.removeChild(fiber.dom);
     return;
   }
 
-  // no dom on this fiber (future: function components) — the removable
-  // dom must be nested inside a child fiber instead.
+  // no dom on this fiber — the removable
+  // dom must be nested inside a child fiber instead
+  // and we look only to child (not its siblings)
+  // because Function components always return single element
   if (fiber.child) {
     commitFiberDeletion(fiber.child);
   }
+}
+
+function findAncestorFiberWithDom(fiber: Fiber | null): FiberWithDom {
+  if (!fiber) {
+    // shall never happen — every committed tree bottoms out at wipRootFiber, which always has a dom
+    throw new Error(
+      "no ancestor fiber with a dom was found while walking up from this fiber",
+    );
+  }
+
+  if (fiber.dom) {
+    return fiber as FiberWithDom;
+  }
+
+  return findAncestorFiberWithDom(fiber.parent);
 }
 
 // babel compiles jsx into calls to this function, per the pragma
@@ -340,7 +383,7 @@ function commitFiberDeletion(fiber: Fiber): void {
 // produces the element tree that render()/performUnitOfWork() consume.
 
 export function createElement(
-  type: string,
+  type: DidactElement["type"],
   props: Record<string, unknown> | null,
   ...children: DidactNode[]
 ): DidactElement {
