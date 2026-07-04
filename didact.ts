@@ -125,41 +125,17 @@ function reconcileChildren(
   // || keeps going until both arrays are exhausted
   while (childElementIndex < childElements.length || oldChildFiber !== null) {
     const childElement = childElements[childElementIndex] ?? null;
-    let newChildFiber: Fiber | null = null;
+
+    const newChildFiber = createChildFiber(
+      oldChildFiber,
+      childElement,
+      wipFiber,
+    );
 
     const isSameType =
       oldChildFiber !== null &&
       childElement !== null &&
       oldChildFiber.type === childElement.type;
-
-    if (isSameType) {
-      // reuse oldChildFiber.dom, take childElement.props, tag UPDATE
-      newChildFiber = {
-        type: oldChildFiber!.type,
-        props: childElement.props,
-        dom: oldChildFiber!.dom,
-        parent: wipFiber,
-        child: null,
-        sibling: null,
-        alternate: oldChildFiber,
-        effectTag: EFFECT_TAG.UPDATE,
-      };
-    }
-
-    if (!isSameType && childElement) {
-      // new child element EXISTS
-      // the element needs a new DOM node, tag PLACEMENT
-      newChildFiber = {
-        type: childElement.type,
-        props: childElement.props,
-        dom: null,
-        parent: wipFiber,
-        child: null,
-        sibling: null,
-        alternate: null,
-        effectTag: EFFECT_TAG.PLACEMENT,
-      };
-    }
 
     if (!isSameType && oldChildFiber) {
       // oldChildFiber exists, but in new element tree it is not present
@@ -186,6 +162,49 @@ function reconcileChildren(
     }
     childElementIndex++;
   }
+}
+
+function createChildFiber(
+  oldChildFiber: Fiber | null,
+  childElement: DidactElement | null,
+  parentFiber: Fiber,
+): Fiber | null {
+  // inlined on purpose: aliasing this through a shared helper function
+  // would lose the narrowing below
+  const isSameType =
+    oldChildFiber !== null &&
+    childElement !== null &&
+    oldChildFiber.type === childElement.type;
+
+  const sharedFiberFields = {
+    parent: parentFiber,
+    child: null,
+    sibling: null,
+  };
+
+  if (isSameType) {
+    return {
+      ...sharedFiberFields,
+      type: oldChildFiber.type,
+      props: childElement.props,
+      dom: oldChildFiber.dom,
+      alternate: oldChildFiber,
+      effectTag: EFFECT_TAG.UPDATE,
+    };
+  }
+
+  if (childElement) {
+    return {
+      ...sharedFiberFields,
+      type: childElement.type,
+      props: childElement.props,
+      dom: null,
+      alternate: null,
+      effectTag: EFFECT_TAG.PLACEMENT,
+    };
+  }
+
+  return null;
 }
 
 function createDom(fiber: Fiber): HTMLElement | Text {
