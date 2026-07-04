@@ -339,21 +339,25 @@ function commitFiberDeletion(fiber: Fiber): void {
 // configured in tsconfig.json and html.html's transpile step.
 // produces the element tree that render()/performUnitOfWork() consume.
 
-export const createElement = (
+export function createElement(
   type: string,
   props: Record<string, unknown> | null,
   ...children: DidactNode[]
-): DidactElement => ({
-  type,
-  props: {
-    ...props,
-    children: children.map((child) =>
-      typeof child === "object" ? child : createTextElement(child),
-    ),
-  },
-});
+): DidactElement {
+  return {
+    type,
+    props: {
+      ...props,
+      children: children.map((child) =>
+        typeof child === "object" ? child : createTextElement(child),
+      ),
+    },
+  };
+}
 
-export const createTextElement = (child: string | number) => ({
-  type: "TEXT_ELEMENT",
-  props: { nodeValue: child, children: [] },
-});
+export function createTextElement(child: string | number): DidactElement {
+  return {
+    type: "TEXT_ELEMENT",
+    props: { nodeValue: child, children: [] },
+  };
+}
