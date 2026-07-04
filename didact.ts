@@ -80,30 +80,30 @@ function workLoop(deadline: IdleDeadline): void {
   requestIdleCallback(workLoop);
 }
 
-function performUnitOfWork(fiber: Fiber): Fiber | null {
+function performUnitOfWork(wipFiber: Fiber): Fiber | null {
   // 1. create DOM for this fiber if it doesn't have one yet
-  if (!fiber.dom) {
-    fiber.dom = createDom(fiber);
+  if (!wipFiber.dom) {
+    wipFiber.dom = createDom(wipFiber);
   }
 
   // 2. build fibers for this fiber's child elements
-  const childElements = fiber.props.children;
+  const childElements = wipFiber.props.children;
 
-  reconcileChildren(fiber, childElements);
+  reconcileChildren(wipFiber, childElements);
 
   // 3.  return whichever fiber should be visited next
 
-  if (fiber.child) {
-    return fiber.child;
+  if (wipFiber.child) {
+    return wipFiber.child;
   }
 
-  if (fiber.sibling) {
-    return fiber.sibling;
+  if (wipFiber.sibling) {
+    return wipFiber.sibling;
   }
 
   // if no sibling, we backtrack to ancestor with sibling
   // and return that sibling
-  let ancestor: Fiber | null = fiber.parent;
+  let ancestor: Fiber | null = wipFiber.parent;
   while (ancestor) {
     if (ancestor.sibling) {
       return ancestor.sibling;
