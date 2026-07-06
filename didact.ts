@@ -26,6 +26,7 @@ interface Fiber {
   sibling: Fiber | null;
   alternate: Fiber | null;
   effectTag: EffectTag | null;
+  hooks?: Hook[];
 }
 
 type FiberWithDom = Fiber & { dom: NonNullable<Fiber["dom"]> };
@@ -38,6 +39,13 @@ const EFFECT_TAG = {
 
 type EffectTag = ObjectValues<typeof EFFECT_TAG>;
 
+interface Hook {
+  state: unknown;
+  queue: Array<(prevState: unknown) => unknown>;
+}
+
+let workLoopStarted = false;
+
 let nextUnitOfWork: Fiber | null = null;
 
 let wipRootFiber: Fiber | null = null;
@@ -45,7 +53,11 @@ let currentRootFiber: Fiber | null = null;
 
 let deletions: Fiber[] = [];
 
-let workLoopStarted = false;
+// tracks which fiber is currently being rendered and which useState call
+// we're on within it, so useState can find its slot without being passed
+// the fiber directly
+let renderingFiber: Fiber | null = null;
+let hookIndex = 0;
 
 export function render(element: DidactElement, container: HTMLElement): void {
   wipRootFiber = {
@@ -124,7 +136,15 @@ function updateFunctionComponent(wipFiber: Fiber) {
     );
   }
 
+  // useState, invoked from inside the component's body below, reads and
+  // writes these globals to find its own fiber and hook slot — the
+  // component itself has no way to receive the fiber as an argument
+  renderingFiber = wipFiber;
+  hookIndex = 0;
+  wipFiber.hooks = [];
+
   const childElements = [wipFiber.type(wipFiber.props)];
+  renderingFiber = null;
 
   // build fibers for this fiber's child elements
   reconcileChildren(wipFiber, childElements);
@@ -376,6 +396,62 @@ function findAncestorFiberWithDom(fiber: Fiber | null): FiberWithDom {
   }
 
   return findAncestorFiberWithDom(fiber.parent);
+}
+
+export function useState<StateType>(
+  initialState: StateType,
+): [StateType, (action: (prevState: StateType) => StateType) => void] {
+  if (!renderingFiber) {
+    // shall never happen — useState can only run while a function component
+    // is being invoked, which only happens while renderingFiber is set
+    throw new Error("useState called outside of a function component render");
+  }
+
+  if (!renderingFiber.hooks) {
+    // shall never happen — updateFunctionComponent always sets hooks to an
+    // empty array before calling the component function
+    throw new Error("useState called on a fiber with no hooks array");
+  }
+
+  const oldHook = renderingFiber.alternate?.hooks?.[hookIndex];
+
+  const hook: Hook = {
+    state: oldHook ? oldHook.state : initialState,
+    queue: [],
+  };
+
+  const pendingActions = oldHook ? oldHook.queue : [];
+  pendingActions.forEach((action) => {
+    hook.state = action(hook.state);
+  });
+
+  const setState = (action: (prevState: StateType) => StateType) => {
+    hook.queue.push(action as (prevState: unknown) => unknown);
+
+    if (!currentRootFiber) {
+      // shall never happen — setState only exists after a first render has
+      // completed, which always sets currentRootFiber
+      throw new Error("setState called before any fiber tree was committed");
+    }
+
+    wipRootFiber = {
+      type: currentRootFiber.type,
+      dom: currentRootFiber.dom,
+      props: currentRootFiber.props,
+      parent: null,
+      child: null,
+      sibling: null,
+      alternate: currentRootFiber,
+      effectTag: null,
+    };
+    nextUnitOfWork = wipRootFiber;
+    deletions = [];
+  };
+
+  renderingFiber.hooks.push(hook);
+  hookIndex++;
+
+  return [hook.state as StateType, setState];
 }
 
 // babel compiles jsx into calls to this function, per the pragma

@@ -16,7 +16,23 @@ function JustAComponent() {
         Hello <span>sick sad</span> world
       </h1>
       <h2>dddd</h2>
+      <Counter />
     </div>
+  );
+}
+
+function Counter() {
+  const [count, setCount] = Didact.useState(0);
+
+  console.log("Counter render, count is:", count);
+
+  return (
+    <h1>
+      <button onClick={() => setCount((previousCount) => previousCount + 1)}>
+        Increment
+      </button>
+      <div>Count: {count}</div>
+    </h1>
   );
 }
 
