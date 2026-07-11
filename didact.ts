@@ -341,15 +341,14 @@ function commitFiber(fiber: Fiber | null): void {
 
   const ancestorFiberWithDom = findAncestorFiberWithDom(fiber.parent);
 
-  // known limitation: appendChild always inserts at the end of the parent's
-  // current children, with no regard for this fiber's position among its
-  // siblings in the fiber tree. when a type-mismatch swap happens at a
-  // non-last index and a later sibling survives as UPDATE (never moved),
-  // the newly placed node lands after it instead of at its correct index.
-
   if (fiber.effectTag === EFFECT_TAG.PLACEMENT && fiber.dom) {
-    // function-component fibers never get a dom (see updateFunctionComponent)
-    ancestorFiberWithDom.dom.appendChild(fiber.dom);
+    const siblingsAttachedDom = findFirstAttachedDomAmongSiblings(fiber);
+    if (siblingsAttachedDom) {
+      ancestorFiberWithDom.dom.insertBefore(fiber.dom, siblingsAttachedDom);
+    } else {
+      // no attached sibling to insert before — this fiber belongs at the end
+      ancestorFiberWithDom.dom.appendChild(fiber.dom);
+    }
   } else if (fiber.effectTag === EFFECT_TAG.UPDATE && fiber.dom) {
     if (!fiber.alternate) {
       // shall never happen — createChildFiber only tags UPDATE together with
@@ -364,6 +363,44 @@ function commitFiber(fiber: Fiber | null): void {
 
   commitFiber(fiber.child);
   commitFiber(fiber.sibling);
+}
+
+// walks forward through PLACEMENT typed fiber siblings to find the dom node that
+// should immediately follow it once inserted — the correct reference node
+// for insertBefore. never looks left: by the time a fiber is committed,
+// commitFiber has already fully committed every earlier sibling (see the
+// child-then-sibling recursion above), so anything already placed to the
+// left is already correctly positioned and doesn't need revisiting.
+//
+// known simplification: only searches PLACEMENT typed fiber's own sibling chain, not
+// an ancestor's siblings once this level is exhausted. sufficient for a
+// PLACEMENT fiber whose parent already existed before this render; not yet
+// extended for a placed fiber whose parent is also new.
+function findFirstAttachedDomAmongSiblings(
+  placementTypedFiber: Fiber,
+): HTMLElement | Text | null {
+  let siblingFiber = placementTypedFiber.sibling;
+
+  while (siblingFiber) {
+    const attachedDom = findAttachedDom(siblingFiber);
+    if (attachedDom) {
+      return attachedDom;
+    }
+    siblingFiber = siblingFiber.sibling;
+  }
+
+  return null;
+}
+
+function findAttachedDom(fiber: Fiber): HTMLElement | Text | null {
+  // dom-less (function component) — its content is one level down
+  if (typeof fiber.type === "function") {
+    return fiber.child ? findAttachedDom(fiber.child) : null;
+  }
+
+  // isConnected is live DOM state —
+  // true only once this node has actually been inserted into the page
+  return fiber.dom && fiber.dom.isConnected ? fiber.dom : null;
 }
 
 function commitFiberDeletion(fiber: Fiber): void {
