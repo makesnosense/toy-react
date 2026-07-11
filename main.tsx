@@ -1,15 +1,18 @@
 import * as Didact from "./didact";
 
 function App() {
-  const [hasSwapped, setHasSwapped] = Didact.useState(false);
+  const [isOriginalOrder, setIsOriginalOrder] = Didact.useState(true);
 
   return (
     <div>
-      <button onClick={() => setHasSwapped((previous) => !previous)}>
+      <button
+        style="display:block; margin-bottom:8px"
+        onClick={() => setIsOriginalOrder((previous) => !previous)}
+      >
         Swap
       </button>
-      {hasSwapped ? <span>changed</span> : <p>original</p>}
-      <h2 style="background-color:pink">unchanged content</h2>
+      {isOriginalOrder ? <div>1. original</div> : <span>1. changed</span>}
+      <h2 style="background-color:pink">2. unchanged content</h2>
     </div>
   );
 }
