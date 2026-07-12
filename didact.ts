@@ -339,30 +339,42 @@ function commitFiber(fiber: Fiber | null): void {
     return;
   }
 
-  const ancestorFiberWithDom = findAncestorFiberWithDom(fiber.parent);
-
-  if (fiber.effectTag === EFFECT_TAG.PLACEMENT && fiber.dom) {
-    const siblingsAttachedDom = findFirstAttachedDomAmongSiblings(fiber);
-    if (siblingsAttachedDom) {
-      ancestorFiberWithDom.dom.insertBefore(fiber.dom, siblingsAttachedDom);
-    } else {
-      // no attached sibling to insert before — this fiber belongs at the end
-      ancestorFiberWithDom.dom.appendChild(fiber.dom);
-    }
-  } else if (fiber.effectTag === EFFECT_TAG.UPDATE && fiber.dom) {
-    if (!fiber.alternate) {
-      // shall never happen — createChildFiber only tags UPDATE together with
-      // setting alternate to the matched old fiber
-      throw new Error(
-        "commitFiber found an UPDATE-tagged fiber with no alternate",
-      );
-    }
-
-    updateDom(fiber.dom, fiber.alternate.props, fiber.props);
+  if (fiber.effectTag === EFFECT_TAG.PLACEMENT) {
+    commitPlacementFiber(fiber);
+  } else if (fiber.effectTag === EFFECT_TAG.UPDATE) {
+    commitUpdateFiber(fiber);
   }
 
+  // recursive calls
   commitFiber(fiber.child);
   commitFiber(fiber.sibling);
+}
+
+function commitPlacementFiber(fiber: Fiber) {
+  if (!fiber.dom) return; // function component's fiber
+
+  const ancestorFiberWithDom = findAncestorFiberWithDom(fiber.parent);
+  const siblingsAttachedDom = findFirstAttachedDomAmongSiblings(fiber);
+  if (siblingsAttachedDom) {
+    ancestorFiberWithDom.dom.insertBefore(fiber.dom, siblingsAttachedDom);
+  } else {
+    // no attached sibling to insert before — this fiber belongs at the end
+    ancestorFiberWithDom.dom.appendChild(fiber.dom);
+  }
+}
+
+function commitUpdateFiber(fiber: Fiber) {
+  if (!fiber.dom) return; // function component's fiber
+
+  if (!fiber.alternate) {
+    // shall never happen — createChildFiber only tags UPDATE together with
+    // setting alternate to the matched old fiber
+    throw new Error(
+      "commitFiber found an UPDATE-tagged fiber with no alternate",
+    );
+  }
+
+  updateDom(fiber.dom, fiber.alternate.props, fiber.props);
 }
 
 // walks forward through PLACEMENT typed fiber siblings to find the dom node that
