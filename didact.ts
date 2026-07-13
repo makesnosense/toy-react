@@ -354,9 +354,13 @@ function commitPlacementFiber(fiber: Fiber) {
   if (!fiber.dom) return; // function component's fiber
 
   const ancestorFiberWithDom = findAncestorFiberWithDom(fiber.parent);
-  const siblingsAttachedDom = findFirstAttachedDomAmongSiblings(fiber);
-  if (siblingsAttachedDom) {
-    ancestorFiberWithDom.dom.insertBefore(fiber.dom, siblingsAttachedDom);
+  const insertionReferenceDom = findAttachedDomAfterFiber(
+    fiber,
+    ancestorFiberWithDom,
+  );
+
+  if (insertionReferenceDom) {
+    ancestorFiberWithDom.dom.insertBefore(fiber.dom, insertionReferenceDom);
   } else {
     // no attached sibling to insert before — this fiber belongs at the end
     ancestorFiberWithDom.dom.appendChild(fiber.dom);
@@ -377,37 +381,57 @@ function commitUpdateFiber(fiber: Fiber) {
   updateDom(fiber.dom, fiber.alternate.props, fiber.props);
 }
 
-// walks forward through PLACEMENT typed fiber siblings to find the dom node that
-// should immediately follow it once inserted — the correct reference node
-// for insertBefore. never looks left: by the time a fiber is committed,
-// commitFiber has already fully committed every earlier sibling (see the
-// child-then-sibling recursion above), so anything already placed to the
-// left is already correctly positioned and doesn't need revisiting.
-//
-// known simplification: only searches PLACEMENT typed fiber's own sibling chain, not
-// an ancestor's siblings once this level is exhausted. sufficient for a
-// PLACEMENT fiber whose parent already existed before this render; not yet
-// extended for a placed fiber whose parent is also new.
-function findFirstAttachedDomAmongSiblings(
-  placementTypedFiber: Fiber,
+// starting with fiber's sinblings goes up until (not including) ancestorFiberWithDom,
+// checking siblings, descending into a dom-less sibling's own children as needed,
+// to find attached dom to the right
+function findAttachedDomAfterFiber(
+  fiber: Fiber,
+  ancestorFiberWithDom: FiberWithDom,
 ): HTMLElement | Text | null {
-  let siblingFiber = placementTypedFiber.sibling;
-
-  while (siblingFiber) {
-    const attachedDom = findAttachedDom(siblingFiber);
-    if (attachedDom) {
-      return attachedDom;
-    }
-    siblingFiber = siblingFiber.sibling;
+  const attachedSiblingDom = findAttachedDomAmongSiblingChain(fiber.sibling);
+  if (attachedSiblingDom) {
+    return attachedSiblingDom;
   }
 
-  return null;
+  if (fiber.parent === ancestorFiberWithDom) {
+    return null;
+  }
+
+  if (!fiber.parent) {
+    // shall never happen — ancestorFiberWithDom was found by walking up
+    // from this same fiber via findAncestorFiberWithDom, so this chain
+    // must reach it before running out of parents
+    throw new Error(
+      "findAttachedDomAfterFiber ran out of ancestors before reaching the dom-bearing ancestor",
+    );
+  }
+
+  return findAttachedDomAfterFiber(fiber.parent, ancestorFiberWithDom);
 }
 
-function findAttachedDom(fiber: Fiber): HTMLElement | Text | null {
+// walks forward through a single level's sibling chain, looking for the
+// first one with an attached dom. never looks left — by the time a fiber
+// is committed, everything to its left at this level has already been
+// committed and correctly positioned.
+function findAttachedDomAmongSiblingChain(
+  siblingFiber: Fiber | null,
+): HTMLElement | Text | null {
+  if (!siblingFiber) {
+    return null;
+  }
+
+  const attachedDom = findAttachedDomDescending(siblingFiber);
+  if (attachedDom) {
+    return attachedDom;
+  }
+
+  return findAttachedDomAmongSiblingChain(siblingFiber.sibling);
+}
+
+function findAttachedDomDescending(fiber: Fiber): HTMLElement | Text | null {
   // dom-less (function component) — its content is one level down
   if (typeof fiber.type === "function") {
-    return fiber.child ? findAttachedDom(fiber.child) : null;
+    return fiber.child ? findAttachedDomDescending(fiber.child) : null;
   }
 
   // isConnected is live DOM state —
