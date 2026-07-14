@@ -83,3 +83,91 @@ describe("dom insertion order", () => {
     );
   });
 });
+
+describe("multiple hooks in one component", () => {
+  const root = createMountedRoot();
+
+  function Counters() {
+    const [count, setCount] = Didact.useState(0);
+    const [label, setLabel] = Didact.useState("a");
+
+    return (
+      <div>
+        <button
+          id="incrementCount"
+          onClick={() => setCount((previous) => previous + 1)}
+        >
+          count
+        </button>
+        <button
+          id="cycleLabel"
+          onClick={() => setLabel((previous) => (previous === "a" ? "b" : "a"))}
+        >
+          label
+        </button>
+        <span id="countValue">{count}</span>
+        <span id="labelValue">{label}</span>
+      </div>
+    );
+  }
+
+  it("keeps each useState call's state independent across updates", async () => {
+    Didact.render(<Counters />, root.current);
+    await waitForRender();
+
+    expect(root.current.querySelector("#countValue")?.textContent).toBe("0");
+    expect(root.current.querySelector("#labelValue")?.textContent).toBe("a");
+
+    root.current.querySelector<HTMLButtonElement>("#incrementCount")!.click();
+    await waitForRender();
+
+    // only count should change here — if hook index tracking were broken,
+    // this update could land on label's slot instead
+    expect(root.current.querySelector("#countValue")?.textContent).toBe("1");
+    expect(root.current.querySelector("#labelValue")?.textContent).toBe("a");
+
+    root.current.querySelector<HTMLButtonElement>("#cycleLabel")!.click();
+    await waitForRender();
+
+    expect(root.current.querySelector("#countValue")?.textContent).toBe("1");
+    expect(root.current.querySelector("#labelValue")?.textContent).toBe("b");
+  });
+});
+
+describe("multiple components using hooks", () => {
+  const root = createMountedRoot();
+
+  function Counter({ id }: { id: string }) {
+    const [count, setCount] = Didact.useState(0);
+    return (
+      <button id={id} onClick={() => setCount((previous) => previous + 1)}>
+        {count}
+      </button>
+    );
+  }
+
+  function App() {
+    return (
+      <div>
+        <Counter id="first" />
+        <Counter id="second" />
+      </div>
+    );
+  }
+
+  it("keeps state independent across separate instances of the same component", async () => {
+    Didact.render(<App />, root.current);
+    await waitForRender();
+
+    expect(root.current.querySelector("#first")?.textContent).toBe("0");
+    expect(root.current.querySelector("#second")?.textContent).toBe("0");
+
+    root.current.querySelector<HTMLButtonElement>("#first")!.click();
+    await waitForRender();
+
+    // clicking the first counter must not touch the second — each fiber
+    // needs its own hooks array, not one shared across the render pass
+    expect(root.current.querySelector("#first")?.textContent).toBe("1");
+    expect(root.current.querySelector("#second")?.textContent).toBe("0");
+  });
+});
