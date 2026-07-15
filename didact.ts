@@ -540,9 +540,15 @@ export function createElement(
     type,
     props: {
       ...props,
-      children: children.map((child) =>
-        typeof child === "object" ? child : createTextElement(child),
-      ),
+      // we need to flatten the array for the case it was something like
+      // <div>
+      //   {groups.map((group) => group.items.map((item) => <span>{item}</span>))}
+      // </div>
+      children: children
+        .flat(Infinity)
+        .map((child) =>
+          typeof child === "object" ? child : createTextElement(child),
+        ),
     },
   };
 }
