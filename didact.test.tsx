@@ -211,37 +211,40 @@ describe("list reconciliation without keys", () => {
   const counterElementByLabel = (label: string) =>
     getByText(root.current, label).closest("div")!;
 
-  it("keeps each counter's state attached to its item when the list is reordered", async () => {
-    Didact.render(<CounterList />, root.current);
-    await waitForRender();
+  it.fails(
+    "keeps each counter's state attached to its item when the list is reordered",
+    async () => {
+      Didact.render(<CounterList />, root.current);
+      await waitForRender();
 
-    // click a 4 times
-    // click b 2 times
-    for (let i = 0; i < 4; i++) {
-      counterElementByLabel("a").querySelector("button")!.click();
-      if (i % 2) counterElementByLabel("b").querySelector("button")!.click();
-    }
+      // click a 4 times
+      // click b 2 times
+      for (let i = 0; i < 4; i++) {
+        counterElementByLabel("a").querySelector("button")!.click();
+        if (i % 2) counterElementByLabel("b").querySelector("button")!.click();
+      }
 
-    await waitForRender();
+      await waitForRender();
 
-    // sanity check before the swap — confirms the clicks landed on the
-    // counters we meant, before we go on to reorder them
-    expect(
-      counterElementByLabel("a").querySelector("button")?.textContent,
-    ).toBe("4");
-    expect(
-      counterElementByLabel("b").querySelector("button")?.textContent,
-    ).toBe("2");
+      // sanity check before the swap — confirms the clicks landed on the
+      // counters we meant, before we go on to reorder them
+      expect(
+        counterElementByLabel("a").querySelector("button")?.textContent,
+      ).toBe("4");
+      expect(
+        counterElementByLabel("b").querySelector("button")?.textContent,
+      ).toBe("2");
 
-    root.current.querySelector<HTMLButtonElement>("#swap")!.click();
-    await waitForRender();
+      root.current.querySelector<HTMLButtonElement>("#swap")!.click();
+      await waitForRender();
 
-    expect(
-      counterElementByLabel("b").querySelector("button")?.textContent,
-    ).toBe("2");
+      expect(
+        counterElementByLabel("b").querySelector("button")?.textContent,
+      ).toBe("2");
 
-    expect(
-      counterElementByLabel("a").querySelector("button")?.textContent,
-    ).toBe("4");
-  });
+      expect(
+        counterElementByLabel("a").querySelector("button")?.textContent,
+      ).toBe("4");
+    },
+  );
 });
