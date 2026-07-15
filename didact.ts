@@ -60,25 +60,31 @@ let renderingFiber: Fiber | null = null;
 let hookIndex = 0;
 
 export function render(element: DidactElement, container: HTMLElement): void {
-  wipRootFiber = {
+  scheduleNewRootFiber({
     type: ROOT_FIBER_TYPE,
     dom: container,
-    props: {
-      children: [element],
-    },
-    parent: null,
-    child: null,
-    sibling: null,
+    props: { children: [element] },
     alternate: currentRootFiber,
-    effectTag: null,
-  };
-
-  nextUnitOfWork = wipRootFiber;
+  });
 
   if (!workLoopStarted) {
     workLoopStarted = true;
     requestIdleCallback(workLoop);
   }
+}
+
+function scheduleNewRootFiber(
+  rootFiberInit: Pick<Fiber, "type" | "dom" | "props" | "alternate">,
+): void {
+  wipRootFiber = {
+    ...rootFiberInit,
+    parent: null,
+    child: null,
+    sibling: null,
+    effectTag: null,
+  };
+  nextUnitOfWork = wipRootFiber;
+  deletions = [];
 }
 
 function workLoop(deadline: IdleDeadline): void {
@@ -507,18 +513,12 @@ export function useState<StateType>(
       throw new Error("setState called before any fiber tree was committed");
     }
 
-    wipRootFiber = {
+    scheduleNewRootFiber({
       type: currentRootFiber.type,
       dom: currentRootFiber.dom,
       props: currentRootFiber.props,
-      parent: null,
-      child: null,
-      sibling: null,
       alternate: currentRootFiber,
-      effectTag: null,
-    };
-    nextUnitOfWork = wipRootFiber;
-    deletions = [];
+    });
   };
 
   renderingFiber.hooks.push(hook);
