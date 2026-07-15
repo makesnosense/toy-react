@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getByText } from "@testing-library/dom";
 import * as Didact from "./didact";
 
 // one macrotask tick, so the shimmed requestIdleCallback in vitest.setup.ts
@@ -169,5 +170,78 @@ describe("multiple components using hooks", () => {
     // needs its own hooks array, not one shared across the render pass
     expect(root.current.querySelector("#first")?.textContent).toBe("1");
     expect(root.current.querySelector("#second")?.textContent).toBe("0");
+  });
+});
+
+describe("list reconciliation without keys", () => {
+  const root = createMountedRoot();
+
+  function Counter({ label }: { label: string }) {
+    const [count, setCount] = Didact.useState(0);
+    return (
+      <div>
+        <span>{label}</span>
+        <button onClick={() => setCount((previous) => previous + 1)}>
+          {count}
+        </button>
+      </div>
+    );
+  }
+
+  function CounterList() {
+    const [labels, setLabels] = Didact.useState(["a", "b"]);
+
+    return (
+      <div>
+        <button
+          id="swap"
+          onClick={() => setLabels((previous) => [...previous].reverse())}
+        >
+          swap
+        </button>
+        <div id="list">
+          {labels.map((label) => (
+            <Counter label={label} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const counterElementByLabel = (label: string) =>
+    getByText(root.current, label).closest("div")!;
+
+  it("keeps each counter's state attached to its item when the list is reordered", async () => {
+    Didact.render(<CounterList />, root.current);
+    await waitForRender();
+
+    // click a 4 times
+    // click b 2 times
+    for (let i = 0; i < 4; i++) {
+      counterElementByLabel("a").querySelector("button")!.click();
+      if (i % 2) counterElementByLabel("b").querySelector("button")!.click();
+    }
+
+    await waitForRender();
+
+    // sanity check before the swap — confirms the clicks landed on the
+    // counters we meant, before we go on to reorder them
+    expect(
+      counterElementByLabel("a").querySelector("button")?.textContent,
+    ).toBe("4");
+    expect(
+      counterElementByLabel("b").querySelector("button")?.textContent,
+    ).toBe("2");
+
+    root.current.querySelector<HTMLButtonElement>("#swap")!.click();
+    await waitForRender();
+
+    expect(
+      counterElementByLabel("b").querySelector("button")?.textContent,
+    ).toBe("2");
+
+    expect(
+      counterElementByLabel("a").querySelector("button")?.textContent,
+    ).toBe("4");
   });
 });
