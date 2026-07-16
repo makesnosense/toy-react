@@ -4,6 +4,7 @@ type DidactFunctionComponent = (props: DidactElementProps) => DidactElement;
 
 interface DidactElement {
   type: string | DidactFunctionComponent;
+  key: string | number | null;
   props: DidactElementProps;
 }
 
@@ -19,6 +20,8 @@ const ROOT_FIBER_TYPE = "ROOT_FIBER";
 
 interface Fiber {
   type: DidactElement["type"];
+  key: string | number | null;
+  index: number;
   props: DidactElementProps;
   dom: HTMLElement | Text | null;
   parent: Fiber | null;
@@ -83,6 +86,8 @@ function scheduleNewRootFiber(
 ): void {
   wipRootFiber = {
     ...rootFiberInit,
+    key: null,
+    index: 0,
     parent: null,
     child: null,
     sibling: null,
@@ -187,6 +192,7 @@ function reconcileChildren(
       oldChildFiber,
       childElement,
       wipFiber,
+      childElementIndex,
     );
 
     const isSameType =
@@ -225,6 +231,7 @@ function createChildFiber(
   oldChildFiber: Fiber | null,
   childElement: DidactElement | null,
   parentFiber: Fiber,
+  index: number,
 ): Fiber | null {
   // inlined on purpose: aliasing this through a shared helper function
   // would lose the narrowing below
@@ -234,6 +241,8 @@ function createChildFiber(
     oldChildFiber.type === childElement.type;
 
   const sharedFiberFields = {
+    key: childElement?.key ?? null,
+    index,
     parent: parentFiber,
     child: null,
     sibling: null,
@@ -542,10 +551,13 @@ export function createElement(
   props: Record<string, unknown> | null,
   ...children: DidactNode[]
 ): DidactElement {
+  const { key: rawKey = null, ...restProps } = props ?? {};
+  const key = toElementKey(rawKey);
   return {
     type,
+    key,
     props: {
-      ...props,
+      ...restProps,
       // we need to flatten the array for the case it was something like
       // <div>
       //   {groups.map((group) => group.items.map((item) => <span>{item}</span>))}
@@ -559,9 +571,17 @@ export function createElement(
   };
 }
 
+function toElementKey(value: unknown): string | number | null {
+  if (typeof value === "string" || typeof value === "number") {
+    return value;
+  }
+  return null;
+}
+
 export function createTextElement(child: string | number): DidactElement {
   return {
     type: "TEXT_ELEMENT",
+    key: null,
     props: { nodeValue: child, children: [] },
   };
 }
