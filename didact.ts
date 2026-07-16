@@ -350,9 +350,10 @@ function commitFiber(fiber: Fiber | null): void {
     return;
   }
 
-  if (fiber.flags === FIBER_FLAG.PLACEMENT) {
+  if (hasFlag(fiber.flags, FIBER_FLAG.PLACEMENT)) {
     commitPlacementFiber(fiber);
-  } else if (fiber.flags === FIBER_FLAG.UPDATE) {
+  }
+  if (hasFlag(fiber.flags, FIBER_FLAG.UPDATE)) {
     commitUpdateFiber(fiber);
   }
 
