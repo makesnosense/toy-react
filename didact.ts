@@ -25,19 +25,24 @@ interface Fiber {
   child: Fiber | null;
   sibling: Fiber | null;
   alternate: Fiber | null;
-  effectTag: EffectTag | null;
+  flags: number;
   hooks?: Hook[];
 }
 
 type FiberWithDom = Fiber & { dom: NonNullable<Fiber["dom"]> };
 
-const EFFECT_TAG = {
-  UPDATE: "UPDATE",
-  PLACEMENT: "PLACEMENT",
-  DELETION: "DELETION",
+const FIBER_FLAG = {
+  NONE: 0b0000,
+  PLACEMENT: 0b0001,
+  UPDATE: 0b0010,
+  DELETION: 0b0100,
 } as const;
 
-type EffectTag = ObjectValues<typeof EFFECT_TAG>;
+type FiberFlag = ObjectValues<typeof FIBER_FLAG>;
+
+function hasFlag(flags: number, flag: FiberFlag): boolean {
+  return (flags & flag) !== 0;
+}
 
 interface Hook {
   state: unknown;
@@ -81,7 +86,7 @@ function scheduleNewRootFiber(
     parent: null,
     child: null,
     sibling: null,
-    effectTag: null,
+    flags: FIBER_FLAG.NONE,
   };
   nextUnitOfWork = wipRootFiber;
   deletions = [];
@@ -192,7 +197,7 @@ function reconcileChildren(
     if (!isSameType && oldChildFiber) {
       // oldChildFiber exists, but in new element tree it is not present
       // so no match for this old child fiber, tag DELETION, push to deletions
-      oldChildFiber.effectTag = EFFECT_TAG.DELETION;
+      oldChildFiber.flags = FIBER_FLAG.DELETION;
       deletions.push(oldChildFiber);
     }
 
@@ -241,7 +246,7 @@ function createChildFiber(
       props: childElement.props,
       dom: oldChildFiber.dom,
       alternate: oldChildFiber,
-      effectTag: EFFECT_TAG.UPDATE,
+      flags: FIBER_FLAG.UPDATE,
     };
   }
 
@@ -252,7 +257,7 @@ function createChildFiber(
       props: childElement.props,
       dom: null,
       alternate: null,
-      effectTag: EFFECT_TAG.PLACEMENT,
+      flags: FIBER_FLAG.PLACEMENT,
     };
   }
 
@@ -345,9 +350,9 @@ function commitFiber(fiber: Fiber | null): void {
     return;
   }
 
-  if (fiber.effectTag === EFFECT_TAG.PLACEMENT) {
+  if (fiber.flags === FIBER_FLAG.PLACEMENT) {
     commitPlacementFiber(fiber);
-  } else if (fiber.effectTag === EFFECT_TAG.UPDATE) {
+  } else if (fiber.flags === FIBER_FLAG.UPDATE) {
     commitUpdateFiber(fiber);
   }
 
