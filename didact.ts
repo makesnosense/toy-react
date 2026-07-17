@@ -184,6 +184,9 @@ function reconcileChildren(
   let oldChildFiber: Fiber | null = wipFiber.alternate?.child ?? null;
   let prevSiblingOfNewChildFiber: Fiber | null = null;
 
+  // not yet used for matching — scaffolding for step 3
+  const oldFiberMapByKey = createOldFibersMapByKey(oldChildFiber);
+
   // || keeps going until both arrays are exhausted
   while (childElementIndex < childElements.length || oldChildFiber !== null) {
     const childElement = childElements[childElementIndex] ?? null;
@@ -225,6 +228,21 @@ function reconcileChildren(
     }
     childElementIndex++;
   }
+}
+
+function createOldFibersMapByKey(
+  leftmostOldChildFiber: Fiber | null,
+): Map<string | number, Fiber> {
+  const map = new Map<string | number, Fiber>();
+  let oldChildFiber = leftmostOldChildFiber;
+
+  while (oldChildFiber) {
+    const reconciliationKey = oldChildFiber.key ?? oldChildFiber.index;
+    map.set(reconciliationKey, oldChildFiber);
+    oldChildFiber = oldChildFiber.sibling;
+  }
+
+  return map;
 }
 
 function createChildFiber(
