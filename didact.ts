@@ -184,18 +184,36 @@ function reconcileChildren(
   let prevSiblingOfNewChildFiber: Fiber | null = null;
 
   const oldFiberMapByKey = createOldFibersMapByKey(oldChildFiber);
+  let highestStableOldFiberIndex = 0;
 
   childElements.forEach((childElement, childElementIndex) => {
     const reconciliationKey = childElement.key ?? childElementIndex;
     const matchedOldFiber = oldFiberMapByKey.get(reconciliationKey) ?? null;
     oldFiberMapByKey.delete(reconciliationKey);
 
-    const newChildFiber = reconcileChildElement(
+    const newChildFiber = createChildFiber(
       matchedOldFiber,
       childElement,
-      childElementIndex,
       wipFiber,
+      childElementIndex,
     );
+
+    if (matchedOldFiber && matchedOldFiber.type !== childElement.type) {
+      // matched by key/index, but the type differs — old dom can't be
+      // reused, so the old fiber is discarded rather than updated
+      matchedOldFiber.flags = FIBER_FLAG.DELETION;
+      deletions.push(matchedOldFiber);
+    }
+
+    // only a genuine reuse participates in the stable/move decision below
+    // we mark the fibers that need to move and cannot just stay
+    if (matchedOldFiber && matchedOldFiber.type === childElement.type) {
+      if (matchedOldFiber.index < highestStableOldFiberIndex) {
+        newChildFiber.flags |= FIBER_FLAG.PLACEMENT;
+      } else {
+        highestStableOldFiberIndex = matchedOldFiber.index;
+      }
+    }
 
     if (childElementIndex === 0) {
       wipFiber.child = newChildFiber;
@@ -211,29 +229,6 @@ function reconcileChildren(
     leftoverOldFiber.flags = FIBER_FLAG.DELETION;
     deletions.push(leftoverOldFiber);
   });
-}
-
-function reconcileChildElement(
-  matchedOldFiber: Fiber | null,
-  childElement: DidactElement,
-  childElementIndex: number,
-  parentFiber: Fiber,
-): Fiber {
-  const newChildFiber = createChildFiber(
-    matchedOldFiber,
-    childElement,
-    parentFiber,
-    childElementIndex,
-  );
-
-  if (matchedOldFiber && matchedOldFiber.type !== childElement.type) {
-    // matched by key/index, but the type differs — old dom can't be
-    // reused, so the old fiber is discarded rather than updated
-    matchedOldFiber.flags = FIBER_FLAG.DELETION;
-    deletions.push(matchedOldFiber);
-  }
-
-  return newChildFiber;
 }
 
 function createOldFibersMapByKey(
