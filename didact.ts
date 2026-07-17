@@ -180,54 +180,60 @@ function reconcileChildren(
   wipFiber: Fiber,
   childElements: DidactElement[],
 ): void {
-  let childElementIndex = 0;
-  let oldChildFiber: Fiber | null = wipFiber.alternate?.child ?? null;
+  const oldChildFiber: Fiber | null = wipFiber.alternate?.child ?? null;
   let prevSiblingOfNewChildFiber: Fiber | null = null;
 
-  // not yet used for matching — scaffolding for step 3
   const oldFiberMapByKey = createOldFibersMapByKey(oldChildFiber);
 
-  // || keeps going until both arrays are exhausted
-  while (childElementIndex < childElements.length || oldChildFiber !== null) {
-    const childElement = childElements[childElementIndex] ?? null;
+  childElements.forEach((childElement, childElementIndex) => {
+    const reconciliationKey = childElement.key ?? childElementIndex;
+    const matchedOldFiber = oldFiberMapByKey.get(reconciliationKey) ?? null;
+    oldFiberMapByKey.delete(reconciliationKey);
 
-    const newChildFiber = createChildFiber(
-      oldChildFiber,
+    const newChildFiber = reconcileChildElement(
+      matchedOldFiber,
       childElement,
-      wipFiber,
       childElementIndex,
+      wipFiber,
     );
 
-    const isSameType =
-      oldChildFiber !== null &&
-      childElement !== null &&
-      oldChildFiber.type === childElement.type;
-
-    if (!isSameType && oldChildFiber) {
-      // oldChildFiber exists, but in new element tree it is not present
-      // so no match for this old child fiber, tag DELETION, push to deletions
-      oldChildFiber.flags = FIBER_FLAG.DELETION;
-      deletions.push(oldChildFiber);
-    }
-
-    // linking new child fibers
-
-    // setting child
     if (childElementIndex === 0) {
       wipFiber.child = newChildFiber;
-      // setting sibling on the child on the left
-    } else if (childElement) {
+    } else {
       prevSiblingOfNewChildFiber!.sibling = newChildFiber;
     }
     prevSiblingOfNewChildFiber = newChildFiber;
+  });
 
-    // moving the while
-    if (oldChildFiber) {
-      // move to next sibling
-      oldChildFiber = oldChildFiber.sibling;
-    }
-    childElementIndex++;
+  // whatever's still in the map was never claimed by any new element —
+  // a genuine removal from the list, not a type mismatch
+  oldFiberMapByKey.forEach((leftoverOldFiber) => {
+    leftoverOldFiber.flags = FIBER_FLAG.DELETION;
+    deletions.push(leftoverOldFiber);
+  });
+}
+
+function reconcileChildElement(
+  matchedOldFiber: Fiber | null,
+  childElement: DidactElement,
+  childElementIndex: number,
+  parentFiber: Fiber,
+): Fiber {
+  const newChildFiber = createChildFiber(
+    matchedOldFiber,
+    childElement,
+    parentFiber,
+    childElementIndex,
+  );
+
+  if (matchedOldFiber && matchedOldFiber.type !== childElement.type) {
+    // matched by key/index, but the type differs — old dom can't be
+    // reused, so the old fiber is discarded rather than updated
+    matchedOldFiber.flags = FIBER_FLAG.DELETION;
+    deletions.push(matchedOldFiber);
   }
+
+  return newChildFiber;
 }
 
 function createOldFibersMapByKey(
@@ -246,20 +252,18 @@ function createOldFibersMapByKey(
 }
 
 function createChildFiber(
-  oldChildFiber: Fiber | null,
-  childElement: DidactElement | null,
+  matchedOldFiber: Fiber | null,
+  childElement: DidactElement,
   parentFiber: Fiber,
   index: number,
-): Fiber | null {
+): Fiber {
   // inlined on purpose: aliasing this through a shared helper function
   // would lose the narrowing below
   const isSameType =
-    oldChildFiber !== null &&
-    childElement !== null &&
-    oldChildFiber.type === childElement.type;
+    matchedOldFiber !== null && matchedOldFiber.type === childElement.type;
 
   const sharedFiberFields = {
-    key: childElement?.key ?? null,
+    key: childElement.key,
     index,
     parent: parentFiber,
     child: null,
@@ -269,15 +273,13 @@ function createChildFiber(
   if (isSameType) {
     return {
       ...sharedFiberFields,
-      type: oldChildFiber.type,
+      type: matchedOldFiber.type,
       props: childElement.props,
-      dom: oldChildFiber.dom,
-      alternate: oldChildFiber,
+      dom: matchedOldFiber.dom,
+      alternate: matchedOldFiber,
       flags: FIBER_FLAG.UPDATE,
     };
-  }
-
-  if (childElement) {
+  } else {
     return {
       ...sharedFiberFields,
       type: childElement.type,
@@ -287,8 +289,6 @@ function createChildFiber(
       flags: FIBER_FLAG.PLACEMENT,
     };
   }
-
-  return null;
 }
 
 function createDom(fiber: Fiber): HTMLElement | Text {
