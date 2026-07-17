@@ -385,7 +385,13 @@ function commitFiber(fiber: Fiber | null): void {
 }
 
 function commitPlacementFiber(fiber: Fiber) {
-  if (!fiber.dom) return; // function component's fiber
+  if (!fiber.dom) {
+    // function component's fiber — no dom of its own to move, but its
+    // placement still needs to happen, so forward it to whatever the
+    // component actually rendered
+    if (fiber.child) commitPlacementFiber(fiber.child);
+    return;
+  }
 
   const ancestorFiberWithDom = findAncestorFiberWithDom(fiber.parent);
   const insertionReferenceDom = findAttachedDomAfterFiber(
@@ -463,6 +469,12 @@ function findAttachedDomAmongSiblingChain(
 }
 
 function findAttachedDomDescending(fiber: Fiber): HTMLElement | Text | null {
+  // a fiber tagged PLACEMENT is about to move — its current dom position
+  // (even if currently connected) can't be trusted as an anchor
+  if (hasFlag(fiber.flags, FIBER_FLAG.PLACEMENT)) {
+    return null;
+  }
+
   // dom-less (function component) — its content is one level down
   if (typeof fiber.type === "function") {
     return fiber.child ? findAttachedDomDescending(fiber.child) : null;

@@ -7,4 +7,11 @@ declare namespace JSX {
     // parameter types, not here.
     [tagName: string]: any;
   }
+
+  // key is a framework-level attribute, not a real prop — allowed on
+  // every element (intrinsic or component) without each component
+  // needing to declare it in its own props type
+  interface IntrinsicAttributes {
+    key?: string | number | null;
+  }
 }
