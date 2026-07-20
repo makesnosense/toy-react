@@ -1,5 +1,34 @@
 export type ObjectValues<T> = T[keyof T];
 
+// how long a work-loop pass may run before yielding back to the host, in
+// milliseconds — mirrors the frame budget react's own scheduler uses
+const WORK_LOOP_FRAME_BUDGET_MS = 5;
+
+// picks the fastest reliable "run this on the next task" primitive
+// available: setImmediate in node (unlike MessageChannel, it doesn't hold
+// the process open, and it fires earlier when both are available);
+// MessageChannel in browsers (postMessage delivery is always async, even
+// same-thread, and unlike setTimeout isn't subject to the 4ms nested-call
+// clamp); setTimeout as a last resort.
+let scheduleWorkUntilDeadline: (performWorkUntilDeadline: () => void) => void;
+
+if ("setImmediate" in globalThis) {
+  const nodeSetImmediate = (
+    globalThis as unknown as { setImmediate: (callback: () => void) => void }
+  ).setImmediate;
+  scheduleWorkUntilDeadline = (performWorkUntilDeadline) =>
+    nodeSetImmediate(performWorkUntilDeadline);
+} else if ("MessageChannel" in globalThis) {
+  const workLoopChannel = new MessageChannel();
+  scheduleWorkUntilDeadline = (performWorkUntilDeadline) => {
+    workLoopChannel.port1.onmessage = () => performWorkUntilDeadline();
+    workLoopChannel.port2.postMessage(null);
+  };
+} else {
+  scheduleWorkUntilDeadline = (performWorkUntilDeadline) =>
+    setTimeout(performWorkUntilDeadline, 0);
+}
+
 type DidactFunctionComponent = (props: DidactElementProps) => DidactElement;
 
 interface DidactElement {
@@ -52,7 +81,7 @@ interface Hook {
   queue: Array<(prevState: unknown) => unknown>;
 }
 
-let workLoopStarted = false;
+let isMessageLoopRunning = false;
 
 let nextUnitOfWork: Fiber | null = null;
 
@@ -67,6 +96,12 @@ let deletions: Fiber[] = [];
 let renderingFiber: Fiber | null = null;
 let hookIndex = 0;
 
+function wakeMessageLoop(): void {
+  if (isMessageLoopRunning) return;
+  isMessageLoopRunning = true;
+  scheduleWorkUntilDeadline(performWorkUntilDeadline);
+}
+
 export function render(element: DidactElement, container: HTMLElement): void {
   scheduleNewRootFiber({
     type: ROOT_FIBER_TYPE,
@@ -75,10 +110,7 @@ export function render(element: DidactElement, container: HTMLElement): void {
     alternate: currentRootFiber,
   });
 
-  if (!workLoopStarted) {
-    workLoopStarted = true;
-    requestIdleCallback(workLoop);
-  }
+  wakeMessageLoop();
 }
 
 function scheduleNewRootFiber(
@@ -97,19 +129,26 @@ function scheduleNewRootFiber(
   deletions = [];
 }
 
-function workLoop(deadline: IdleDeadline): void {
+function performWorkUntilDeadline(): void {
+  const sliceStart = performance.now();
+  const sliceDeadline = sliceStart + WORK_LOOP_FRAME_BUDGET_MS;
   let shouldYield = false;
 
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
-    shouldYield = deadline.timeRemaining() < 1;
+    shouldYield = performance.now() >= sliceDeadline;
   }
 
   if (!nextUnitOfWork && wipRootFiber) {
     commitRootFiber();
   }
 
-  requestIdleCallback(workLoop);
+  // if no other work, loop dies, waiting for explicit wake
+  if (nextUnitOfWork) {
+    scheduleWorkUntilDeadline(performWorkUntilDeadline);
+  } else {
+    isMessageLoopRunning = false;
+  }
 }
 
 function performUnitOfWork(wipFiber: Fiber): Fiber | null {
@@ -559,6 +598,8 @@ export function useState<StateType>(
       props: currentRootFiber.props,
       alternate: currentRootFiber,
     });
+
+    wakeMessageLoop();
   };
 
   renderingFiber.hooks.push(hook);

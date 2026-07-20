@@ -1,10 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getByText } from "@testing-library/dom";
 import * as Didact from "./didact";
 
-// one macrotask tick, so the shimmed requestIdleCallback in vitest.setup.ts
-// gets a chance to run and commit the fiber tree
-const waitForRender = () => new Promise((resolve) => setTimeout(resolve, 0));
+// one macrotask tick
+const waitForRender = () =>
+  new Promise<void>((resolve) => {
+    const nodeSetImmediate = (
+      globalThis as unknown as { setImmediate: (callback: () => void) => void }
+    ).setImmediate;
+    nodeSetImmediate(resolve);
+  });
 
 // a fresh dom node, attached to document.body so Node.isConnected reports
 // true — attached and detached around every test via beforeEach/afterEach,
@@ -27,6 +32,35 @@ function createMountedRoot() {
     },
   };
 }
+
+describe("work loop scheduling", () => {
+  const containerA = createMountedRoot();
+  const containerB = createMountedRoot();
+
+  it("starts the work loop only once, even across multiple renders", async () => {
+    const nodeGlobal = globalThis as unknown as {
+      setImmediate: (callback: () => void) => void;
+    };
+
+    // spying before the (fresh) module loads matters
+    const setImmediateSpy = vi.spyOn(nodeGlobal, "setImmediate");
+
+    vi.resetModules();
+    const Didact = await import("./didact");
+
+    Didact.render(<div />, containerA.current);
+    Didact.render(<div />, containerB.current);
+
+    expect(setImmediateSpy).toHaveBeenCalledTimes(1);
+
+    // let the one real pending performWorkUntilDeadline actually run and
+    // settle, instead of leaving it dangling on the event loop past this
+    // test's end
+    await waitForRender();
+
+    setImmediateSpy.mockRestore();
+  });
+});
 
 describe("render", () => {
   const root = createMountedRoot();
