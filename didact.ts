@@ -152,6 +152,16 @@ function performWorkUntilDeadline(): void {
 }
 
 function performUnitOfWork(wipFiber: Fiber): Fiber | null {
+  beginWork(wipFiber);
+
+  if (wipFiber.child) {
+    return wipFiber.child;
+  }
+
+  return completeUnitOfWork(wipFiber);
+}
+
+function beginWork(wipFiber: Fiber): void {
   const isFunctionComponent = typeof wipFiber.type === "function";
 
   if (isFunctionComponent) {
@@ -159,25 +169,22 @@ function performUnitOfWork(wipFiber: Fiber): Fiber | null {
   } else {
     updateHostComponent(wipFiber);
   }
+}
 
-  // return whichever fiber should be visited next
+// walks back up from a fiber whose subtree is fully processed, marking
+// each ancestor complete in turn, until it finds a sibling to hand off
+// to as the next unit of work — or runs out of ancestors entirely
+function completeUnitOfWork(wipFiber: Fiber): Fiber | null {
+  let completedFiber: Fiber | null = wipFiber;
 
-  if (wipFiber.child) {
-    return wipFiber.child;
-  }
+  while (completedFiber) {
+    // childLanes bubbling hooks in here – to add later
 
-  if (wipFiber.sibling) {
-    return wipFiber.sibling;
-  }
-
-  // if no sibling, we backtrack to ancestor with sibling
-  // and return that sibling
-  let ancestor: Fiber | null = wipFiber.parent;
-  while (ancestor) {
-    if (ancestor.sibling) {
-      return ancestor.sibling;
+    if (completedFiber.sibling) {
+      return completedFiber.sibling;
     }
-    ancestor = ancestor.parent;
+
+    completedFiber = completedFiber.parent;
   }
 
   return null;
