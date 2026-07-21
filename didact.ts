@@ -186,6 +186,11 @@ function beginWork(wipFiber: Fiber): void {
   } else {
     updateHostComponent(wipFiber);
   }
+
+  // whatever pending update caused this fiber to be visited has now
+  // been applied — clear it so bubbling (and later, bailout) don't see
+  // stale "still pending" bits after the work is actually done
+  wipFiber.lanes = LANE.NONE;
 }
 
 // walks back up from a fiber whose subtree is fully processed, marking
@@ -195,7 +200,7 @@ function completeUnitOfWork(wipFiber: Fiber): Fiber | null {
   let completedFiber: Fiber | null = wipFiber;
 
   while (completedFiber) {
-    // childLanes bubbling hooks in here – to add later
+    bubbleChildLanes(completedFiber);
 
     if (completedFiber.sibling) {
       return completedFiber.sibling;
@@ -205,6 +210,11 @@ function completeUnitOfWork(wipFiber: Fiber): Fiber | null {
   }
 
   return null;
+}
+
+function bubbleChildLanes(fiber: Fiber): void {
+  if (!fiber.parent) return;
+  fiber.parent.childLanes |= fiber.lanes | fiber.childLanes;
 }
 
 function updateFunctionComponent(wipFiber: Fiber) {
