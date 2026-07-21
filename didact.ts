@@ -217,6 +217,16 @@ function bubbleChildLanes(fiber: Fiber): void {
   fiber.parent.childLanes |= fiber.lanes | fiber.childLanes;
 }
 
+function markUpdateLaneFromFiberToRoot(fiber: Fiber, lane: Lane): void {
+  fiber.lanes |= lane;
+
+  let ancestor = fiber.parent;
+  while (ancestor) {
+    ancestor.childLanes |= lane;
+    ancestor = ancestor.parent;
+  }
+}
+
 function updateFunctionComponent(wipFiber: Fiber) {
   if (typeof wipFiber.type !== "function") {
     // shall never happen — performUnitOfWork only dispatches here for function-typed fibers
@@ -612,6 +622,7 @@ export function useState<StateType>(
     throw new Error("useState called on a fiber with no hooks array");
   }
 
+  const ownerFiber = renderingFiber;
   const oldHook = renderingFiber.alternate?.hooks?.[hookIndex];
 
   const hook: Hook = {
@@ -626,6 +637,7 @@ export function useState<StateType>(
 
   const setState = (action: (prevState: StateType) => StateType) => {
     hook.queue.push(action as (prevState: unknown) => unknown);
+    markUpdateLaneFromFiberToRoot(ownerFiber, LANE.DEFAULT); // placeholder — real classification lands separately
 
     if (!currentRootFiber) {
       // shall never happen — setState only exists after a first render has
