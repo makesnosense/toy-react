@@ -53,12 +53,14 @@ interface Fiber {
   index: number;
   props: DidactElementProps;
   dom: HTMLElement | Text | null;
+  flags: number;
+  hooks?: Hook[];
+  lanes: Lanes;
+  childLanes: Lanes;
   parent: Fiber | null;
   child: Fiber | null;
   sibling: Fiber | null;
   alternate: Fiber | null;
-  flags: number;
-  hooks?: Hook[];
 }
 
 type FiberWithDom = Fiber & { dom: NonNullable<Fiber["dom"]> };
@@ -75,6 +77,19 @@ type FiberFlag = ObjectValues<typeof FIBER_FLAG>;
 function hasFlag(flags: number, flag: FiberFlag): boolean {
   return (flags & flag) !== 0;
 }
+
+const LANE = {
+  NONE: 0b0000,
+  DISCRETE: 0b0001,
+  CONTINUOUS: 0b0010,
+  DEFAULT: 0b0100,
+  LOW: 0b1000,
+} as const;
+
+// Lane: a single bit
+// Lanes: any combination of bits
+type Lane = ObjectValues<typeof LANE>;
+type Lanes = number;
 
 interface Hook {
   state: unknown;
@@ -120,6 +135,8 @@ function scheduleNewRootFiber(
     ...rootFiberInit,
     key: null,
     index: 0,
+    lanes: LANE.NONE,
+    childLanes: LANE.NONE,
     parent: null,
     child: null,
     sibling: null,
@@ -319,6 +336,10 @@ function createChildFiber(
       dom: matchedOldFiber.dom,
       alternate: matchedOldFiber,
       flags: FIBER_FLAG.UPDATE,
+      // we inherit lanes from previous because this is where setState marked them
+      lanes: matchedOldFiber.lanes,
+      // derived value, recalculated fresh each render via bubbling — never carried forward
+      childLanes: LANE.NONE,
     };
   } else {
     return {
@@ -328,6 +349,9 @@ function createChildFiber(
       dom: null,
       alternate: null,
       flags: FIBER_FLAG.PLACEMENT,
+      // fresh fiber, nothing to work on yet
+      lanes: LANE.NONE,
+      childLanes: LANE.NONE,
     };
   }
 }
