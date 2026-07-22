@@ -136,7 +136,7 @@ function scheduleNewRootFiber(
     key: null,
     index: 0,
     lanes: LANE.NONE,
-    childLanes: LANE.NONE,
+    childLanes: rootFiberInit.alternate?.childLanes ?? LANE.NONE,
     parent: null,
     child: null,
     sibling: null,
@@ -179,8 +179,18 @@ function performUnitOfWork(wipFiber: Fiber): Fiber | null {
 }
 
 function beginWork(wipFiber: Fiber): void {
-  const isFunctionComponent = typeof wipFiber.type === "function";
+  // debugger;
+  const isInitialRender = wipFiber.alternate === null;
+  const hasUnchangedProps =
+    !isInitialRender && wipFiber.props === wipFiber.alternate!.props;
+  const hasNoPendingWork =
+    wipFiber.lanes === LANE.NONE && wipFiber.childLanes === LANE.NONE;
 
+  if (hasUnchangedProps && hasNoPendingWork) {
+    console.log("[bailout] would skip:", wipFiber.type);
+  }
+
+  const isFunctionComponent = typeof wipFiber.type === "function";
   if (isFunctionComponent) {
     updateFunctionComponent(wipFiber);
   } else {

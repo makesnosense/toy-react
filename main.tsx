@@ -4,6 +4,10 @@ function ToggleSection({ isOriginalOrder }: { isOriginalOrder: boolean }) {
   return isOriginalOrder ? <div>1. original</div> : <span>1. changed</span>;
 }
 
+const unchangedHeading = (
+  <h2 style="background-color:pink">2. unchanged content</h2>
+);
+
 function App() {
   const [isOriginalOrder, setIsOriginalOrder] = Didact.useState(true);
 
@@ -16,7 +20,7 @@ function App() {
         Swap
       </button>
       <ToggleSection isOriginalOrder={isOriginalOrder} />
-      <h2 style="background-color:pink">2. unchanged content</h2>
+      {unchangedHeading}
     </div>
   );
 }
