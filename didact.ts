@@ -191,13 +191,14 @@ function performWorkUntilDeadline(): void {
 }
 
 function performUnitOfWork(wipFiber: Fiber): Fiber | null {
-  const nextFiberToVisit = beginWork(wipFiber);
+  const nextFiberBelowToVisit = beginWork(wipFiber);
 
-  if (nextFiberToVisit) {
-    return nextFiberToVisit;
+  if (!nextFiberBelowToVisit) {
+    // work is fully done on this subtree, walk back up for the next sibling
+    return completeUnitOfWork(wipFiber);
   }
 
-  return completeUnitOfWork(wipFiber);
+  return nextFiberBelowToVisit;
 }
 
 function beginWork(wipFiber: Fiber): Fiber | null {
