@@ -65,6 +65,21 @@ interface Fiber {
 
 type FiberWithDom = Fiber & { dom: NonNullable<Fiber["dom"]> };
 
+type CallerManagedFiberFields = Pick<
+  Fiber,
+  | "type"
+  | "key"
+  | "index"
+  | "props"
+  | "dom"
+  | "parent"
+  | "child"
+  | "sibling"
+  | "flags"
+  | "lanes"
+  | "childLanes"
+>;
+
 const FIBER_FLAG = {
   NONE: 0b0000,
   PLACEMENT: 0b0001,
@@ -131,8 +146,10 @@ export function render(element: DidactElement, container: HTMLElement): void {
 function scheduleNewRootFiber(
   rootFiberInit: Pick<Fiber, "type" | "dom" | "props" | "alternate">,
 ): void {
-  wipRootFiber = {
-    ...rootFiberInit,
+  const overrides: CallerManagedFiberFields = {
+    type: rootFiberInit.type,
+    dom: rootFiberInit.dom,
+    props: rootFiberInit.props,
     key: null,
     index: 0,
     lanes: LANE.NONE,
@@ -142,6 +159,11 @@ function scheduleNewRootFiber(
     sibling: null,
     flags: FIBER_FLAG.NONE,
   };
+
+  wipRootFiber = rootFiberInit.alternate
+    ? getOrCreateWorkInProgressFiber(rootFiberInit.alternate, overrides)
+    : { ...overrides, alternate: null };
+
   nextUnitOfWork = wipRootFiber;
   deletions = [];
 }
@@ -169,25 +191,33 @@ function performWorkUntilDeadline(): void {
 }
 
 function performUnitOfWork(wipFiber: Fiber): Fiber | null {
-  beginWork(wipFiber);
+  const nextFiberToVisit = beginWork(wipFiber);
 
-  if (wipFiber.child) {
-    return wipFiber.child;
+  if (nextFiberToVisit) {
+    return nextFiberToVisit;
   }
 
   return completeUnitOfWork(wipFiber);
 }
 
-function beginWork(wipFiber: Fiber): void {
-  // debugger;
+function beginWork(wipFiber: Fiber): Fiber | null {
   const isInitialRender = wipFiber.alternate === null;
   const hasUnchangedProps =
     !isInitialRender && wipFiber.props === wipFiber.alternate!.props;
-  const hasNoPendingWork =
-    wipFiber.lanes === LANE.NONE && wipFiber.childLanes === LANE.NONE;
+  const hasPendingWork = wipFiber.lanes !== LANE.NONE;
+  const hasPendingWorkBelow = wipFiber.childLanes !== LANE.NONE;
+  const hasPendingWorkOnlyBelow = !hasPendingWork && hasPendingWorkBelow;
 
-  if (hasUnchangedProps && hasNoPendingWork) {
-    console.log("[bailout] would skip:", wipFiber.type);
+  if (hasUnchangedProps && !hasPendingWork && !hasPendingWorkBelow) {
+    // nothing anywhere in this subtree needs anything — don't even
+    // walk into it; child/sibling already point at the correct,
+    // currently-valid, already-committed subtree
+    return null;
+  }
+
+  if (hasUnchangedProps && hasPendingWorkOnlyBelow) {
+    cloneChildFibers(wipFiber);
+    return wipFiber.child;
   }
 
   const isFunctionComponent = typeof wipFiber.type === "function";
@@ -201,6 +231,51 @@ function beginWork(wipFiber: Fiber): void {
   // been applied — clear it so bubbling (and later, bailout) don't see
   // stale "still pending" bits after the work is actually done
   wipFiber.lanes = LANE.NONE;
+  return wipFiber.child;
+}
+
+function cloneChildFibers(wipFiber: Fiber): void {
+  const oldChildFiber = wipFiber.alternate?.child ?? null;
+  let prevSiblingOfClonedChildFiber: Fiber | null = null;
+  let oldChildFiberToClone = oldChildFiber;
+
+  while (oldChildFiberToClone) {
+    const clonedChildFiber = cloneUnchangedChildFiber(
+      oldChildFiberToClone,
+      wipFiber,
+    );
+
+    if (!prevSiblingOfClonedChildFiber) {
+      wipFiber.child = clonedChildFiber;
+    } else {
+      prevSiblingOfClonedChildFiber.sibling = clonedChildFiber;
+    }
+    prevSiblingOfClonedChildFiber = clonedChildFiber;
+
+    oldChildFiberToClone = oldChildFiberToClone.sibling;
+  }
+}
+
+function cloneUnchangedChildFiber(
+  matchedOldFiber: Fiber,
+  parentFiber: Fiber,
+): Fiber {
+  const clonedFiber = getOrCreateWorkInProgressFiber(matchedOldFiber, {
+    type: matchedOldFiber.type,
+    key: matchedOldFiber.key,
+    index: matchedOldFiber.index,
+    props: matchedOldFiber.props,
+    dom: matchedOldFiber.dom,
+    parent: parentFiber,
+    child: matchedOldFiber.child,
+    sibling: null,
+    flags: FIBER_FLAG.NONE,
+    lanes: matchedOldFiber.lanes,
+    childLanes: matchedOldFiber.childLanes,
+  });
+
+  clonedFiber.hooks = matchedOldFiber.hooks;
+  return clonedFiber;
 }
 
 // walks back up from a fiber whose subtree is fully processed, marking
@@ -273,6 +348,9 @@ function reconcileChildren(
   wipFiber: Fiber,
   childElements: DidactElement[],
 ): void {
+  // clear existing child
+  wipFiber.child = null;
+
   const oldChildFiber: Fiber | null = wipFiber.alternate?.child ?? null;
   let prevSiblingOfNewChildFiber: Fiber | null = null;
 
@@ -354,29 +432,28 @@ function createChildFiber(
     key: childElement.key,
     index,
     parent: parentFiber,
-    child: null,
-    sibling: null,
   };
-
   if (isSameType) {
-    return {
+    return getOrCreateWorkInProgressFiber(matchedOldFiber, {
       ...sharedFiberFields,
       type: matchedOldFiber.type,
       props: childElement.props,
       dom: matchedOldFiber.dom,
-      alternate: matchedOldFiber,
+      child: matchedOldFiber.child,
+      sibling: null,
       flags: FIBER_FLAG.UPDATE,
       // we inherit lanes from previous because this is where setState marked them
       lanes: matchedOldFiber.lanes,
-      // derived value, recalculated fresh each render via bubbling — never carried forward
-      childLanes: LANE.NONE,
-    };
+      childLanes: matchedOldFiber.childLanes,
+    });
   } else {
     return {
       ...sharedFiberFields,
       type: childElement.type,
       props: childElement.props,
       dom: null,
+      child: null,
+      sibling: null,
       alternate: null,
       flags: FIBER_FLAG.PLACEMENT,
       // fresh fiber, nothing to work on yet
@@ -384,6 +461,28 @@ function createChildFiber(
       childLanes: LANE.NONE,
     };
   }
+}
+
+// double-buffering: reuses this fiber's own pooled counterpart (its
+// alternate, from two renders back) if one exists, mutating it in place
+// instead of allocating. every render-varying (caller managed) field is required, not
+// optional — nothing is left over from whatever the pooled object was
+// last used for.
+function getOrCreateWorkInProgressFiber(
+  oldFiber: Fiber,
+  overrides: CallerManagedFiberFields,
+): Fiber {
+  const pooledFiber = oldFiber.alternate;
+
+  if (pooledFiber) {
+    Object.assign(pooledFiber, overrides);
+    pooledFiber.alternate = oldFiber;
+    return pooledFiber;
+  }
+
+  const freshFiber: Fiber = { ...overrides, alternate: oldFiber };
+  oldFiber.alternate = freshFiber;
+  return freshFiber;
 }
 
 function createDom(fiber: Fiber): HTMLElement | Text {
