@@ -241,10 +241,7 @@ function cloneChildFibers(wipFiber: Fiber): void {
   let oldChildFiberToClone = oldChildFiber;
 
   while (oldChildFiberToClone) {
-    const clonedChildFiber = cloneUnchangedChildFiber(
-      oldChildFiberToClone,
-      wipFiber,
-    );
+    const clonedChildFiber = cloneChildFiber(oldChildFiberToClone, wipFiber);
 
     if (!prevSiblingOfClonedChildFiber) {
       wipFiber.child = clonedChildFiber;
@@ -257,25 +254,25 @@ function cloneChildFibers(wipFiber: Fiber): void {
   }
 }
 
-function cloneUnchangedChildFiber(
-  matchedOldFiber: Fiber,
+function cloneChildFiber(
+  oldChildFiberToClone: Fiber,
   parentFiber: Fiber,
 ): Fiber {
-  const clonedFiber = getOrCreateWorkInProgressFiber(matchedOldFiber, {
-    type: matchedOldFiber.type,
-    key: matchedOldFiber.key,
-    index: matchedOldFiber.index,
-    props: matchedOldFiber.props,
-    dom: matchedOldFiber.dom,
+  const clonedFiber = getOrCreateWorkInProgressFiber(oldChildFiberToClone, {
+    type: oldChildFiberToClone.type,
+    key: oldChildFiberToClone.key,
+    index: oldChildFiberToClone.index,
+    props: oldChildFiberToClone.props,
+    dom: oldChildFiberToClone.dom,
     parent: parentFiber,
-    child: matchedOldFiber.child,
+    child: oldChildFiberToClone.child,
     sibling: null,
     flags: FIBER_FLAG.NONE,
-    lanes: matchedOldFiber.lanes,
-    childLanes: matchedOldFiber.childLanes,
+    lanes: oldChildFiberToClone.lanes,
+    childLanes: oldChildFiberToClone.childLanes,
   });
 
-  clonedFiber.hooks = matchedOldFiber.hooks;
+  clonedFiber.hooks = oldChildFiberToClone.hooks;
   return clonedFiber;
 }
 
@@ -355,35 +352,42 @@ function reconcileChildren(
   const oldChildFiber: Fiber | null = wipFiber.alternate?.child ?? null;
   let prevSiblingOfNewChildFiber: Fiber | null = null;
 
-  const oldFiberMapByKey = createOldFibersMapByKey(oldChildFiber);
+  const oldChildFibersMapByKey = createOldChildFibersMapByKey(oldChildFiber);
   let highestStableOldFiberIndex = 0;
 
   childElements.forEach((childElement, childElementIndex) => {
     const reconciliationKey = childElement.key ?? childElementIndex;
-    const matchedOldFiber = oldFiberMapByKey.get(reconciliationKey) ?? null;
-    oldFiberMapByKey.delete(reconciliationKey);
+    const matchedOldChildFiber =
+      oldChildFibersMapByKey.get(reconciliationKey) ?? null;
+    oldChildFibersMapByKey.delete(reconciliationKey);
 
     const newChildFiber = createChildFiber(
-      matchedOldFiber,
+      matchedOldChildFiber,
       childElement,
       wipFiber,
       childElementIndex,
     );
 
-    if (matchedOldFiber && matchedOldFiber.type !== childElement.type) {
+    if (
+      matchedOldChildFiber &&
+      matchedOldChildFiber.type !== childElement.type
+    ) {
       // matched by key/index, but the type differs — old dom can't be
       // reused, so the old fiber is discarded rather than updated
-      matchedOldFiber.flags = FIBER_FLAG.DELETION;
-      deletions.push(matchedOldFiber);
+      matchedOldChildFiber.flags = FIBER_FLAG.DELETION;
+      deletions.push(matchedOldChildFiber);
     }
 
     // only a genuine reuse participates in the stable/move decision below
     // we mark the fibers that need to move and cannot just stay
-    if (matchedOldFiber && matchedOldFiber.type === childElement.type) {
-      if (matchedOldFiber.index < highestStableOldFiberIndex) {
+    if (
+      matchedOldChildFiber &&
+      matchedOldChildFiber.type === childElement.type
+    ) {
+      if (matchedOldChildFiber.index < highestStableOldFiberIndex) {
         newChildFiber.flags |= FIBER_FLAG.PLACEMENT;
       } else {
-        highestStableOldFiberIndex = matchedOldFiber.index;
+        highestStableOldFiberIndex = matchedOldChildFiber.index;
       }
     }
 
@@ -397,13 +401,13 @@ function reconcileChildren(
 
   // whatever's still in the map was never claimed by any new element —
   // a genuine removal from the list, not a type mismatch
-  oldFiberMapByKey.forEach((leftoverOldFiber) => {
+  oldChildFibersMapByKey.forEach((leftoverOldFiber) => {
     leftoverOldFiber.flags = FIBER_FLAG.DELETION;
     deletions.push(leftoverOldFiber);
   });
 }
 
-function createOldFibersMapByKey(
+function createOldChildFibersMapByKey(
   leftmostOldChildFiber: Fiber | null,
 ): Map<string | number, Fiber> {
   const map = new Map<string | number, Fiber>();
@@ -419,7 +423,7 @@ function createOldFibersMapByKey(
 }
 
 function createChildFiber(
-  matchedOldFiber: Fiber | null,
+  matchedOldChildFiber: Fiber | null,
   childElement: DidactElement,
   parentFiber: Fiber,
   index: number,
@@ -427,7 +431,8 @@ function createChildFiber(
   // inlined on purpose: aliasing this through a shared helper function
   // would lose the narrowing below
   const isSameType =
-    matchedOldFiber !== null && matchedOldFiber.type === childElement.type;
+    matchedOldChildFiber !== null &&
+    matchedOldChildFiber.type === childElement.type;
 
   const sharedFiberFields = {
     key: childElement.key,
@@ -435,17 +440,17 @@ function createChildFiber(
     parent: parentFiber,
   };
   if (isSameType) {
-    return getOrCreateWorkInProgressFiber(matchedOldFiber, {
+    return getOrCreateWorkInProgressFiber(matchedOldChildFiber, {
       ...sharedFiberFields,
-      type: matchedOldFiber.type,
+      type: matchedOldChildFiber.type,
       props: childElement.props,
-      dom: matchedOldFiber.dom,
-      child: matchedOldFiber.child,
+      dom: matchedOldChildFiber.dom,
+      child: matchedOldChildFiber.child,
       sibling: null,
       flags: FIBER_FLAG.UPDATE,
       // we inherit lanes from previous because this is where setState marked them
-      lanes: matchedOldFiber.lanes,
-      childLanes: matchedOldFiber.childLanes,
+      lanes: matchedOldChildFiber.lanes,
+      childLanes: matchedOldChildFiber.childLanes,
     });
   } else {
     return {
