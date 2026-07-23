@@ -160,9 +160,14 @@ function scheduleNewRootFiber(
     flags: FIBER_FLAG.NONE,
   };
 
-  wipRootFiber = rootFiberInit.alternate
-    ? getOrCreateWorkInProgressFiber(rootFiberInit.alternate, overrides)
-    : { ...overrides, alternate: null };
+  if (rootFiberInit.alternate) {
+    wipRootFiber = getOrCreateWorkInProgressFiber(
+      rootFiberInit.alternate,
+      overrides,
+    );
+  } else {
+    wipRootFiber = { ...overrides, alternate: null };
+  }
 
   nextUnitOfWork = wipRootFiber;
   deletions = [];
@@ -361,22 +366,12 @@ function reconcileChildren(
       oldChildFibersMapByKey.get(reconciliationKey) ?? null;
     oldChildFibersMapByKey.delete(reconciliationKey);
 
-    const newChildFiber = createChildFiber(
+    const newChildFiber = reconcileChildFiber(
       matchedOldChildFiber,
       childElement,
       wipFiber,
       childElementIndex,
     );
-
-    if (
-      matchedOldChildFiber &&
-      matchedOldChildFiber.type !== childElement.type
-    ) {
-      // matched by key/index, but the type differs — old dom can't be
-      // reused, so the old fiber is discarded rather than updated
-      matchedOldChildFiber.flags = FIBER_FLAG.DELETION;
-      deletions.push(matchedOldChildFiber);
-    }
 
     // only a genuine reuse participates in the stable/move decision below
     // we mark the fibers that need to move and cannot just stay
@@ -422,12 +417,19 @@ function createOldChildFibersMapByKey(
   return map;
 }
 
-function createChildFiber(
+function reconcileChildFiber(
   matchedOldChildFiber: Fiber | null,
   childElement: DidactElement,
   parentFiber: Fiber,
   index: number,
 ): Fiber {
+  if (matchedOldChildFiber && matchedOldChildFiber.type !== childElement.type) {
+    // matched by key/index, but the type differs — old dom can't be
+    // reused, so the old fiber is discarded rather than updated
+    matchedOldChildFiber.flags = FIBER_FLAG.DELETION;
+    deletions.push(matchedOldChildFiber);
+  }
+
   // inlined on purpose: aliasing this through a shared helper function
   // would lose the narrowing below
   const isSameType =
@@ -616,7 +618,7 @@ function commitUpdateFiber(fiber: Fiber) {
   if (!fiber.dom) return; // function component's fiber
 
   if (!fiber.alternate) {
-    // shall never happen — createChildFiber only tags UPDATE together with
+    // shall never happen — reconcileChildFiber only tags UPDATE together with
     // setting alternate to the matched old fiber
     throw new Error(
       "commitFiber found an UPDATE-tagged fiber with no alternate",
