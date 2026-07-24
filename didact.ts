@@ -54,6 +54,7 @@ interface Fiber {
   props: DidactElementProps;
   dom: HTMLElement | Text | null;
   flags: number;
+  subtreeFlags: number;
   hooks?: Hook[];
   lanes: Lanes;
   childLanes: Lanes;
@@ -166,7 +167,11 @@ function scheduleNewRootFiber(
       overrides,
     );
   } else {
-    wipRootFiber = { ...overrides, alternate: null };
+    wipRootFiber = {
+      ...overrides,
+      alternate: null,
+      subtreeFlags: FIBER_FLAG.NONE,
+    };
   }
 
   nextUnitOfWork = wipRootFiber;
@@ -300,16 +305,41 @@ function completeUnitOfWork(wipFiber: Fiber): Fiber | null {
   return null;
 }
 
-function bubbleProperties(fiber: Fiber): void {
-  let childLanes: Lanes = LANE.NONE;
+function bubbleProperties(wipFiber: Fiber): void {
+  // true when this fiber's own children were never re-derived this render
+  // which happens only during tier 1 "nothing runs" full bailout
+  const fiberDidBailout =
+    wipFiber.alternate !== null && wipFiber.alternate.child === wipFiber.child;
 
-  let child = fiber.child;
+  // union of flags whose lifetime is tied to the fiber's own code (e.g.
+  // "has an effect hook"), not to a single render — only these are
+  // trustworthy through a bailout. mirrors real react's StaticMask;
+  // didact has no such flags yet, so this is empty for now.
+  const STATIC_FLAG_MASK = 0b0000;
+
+  let newChildLanes: Lanes = LANE.NONE;
+  let newSubtreeFlags = FIBER_FLAG.NONE;
+
+  let child = wipFiber.child;
+  // roll to the right through siblings chain
   while (child) {
-    childLanes |= child.lanes | child.childLanes;
+    newChildLanes |= child.lanes | child.childLanes;
+
+    if (fiberDidBailout) {
+      // a bailed child's flags are stale leftovers, not this render's
+      // truth — only the static subset (currently none) survives
+      newSubtreeFlags |= child.flags & STATIC_FLAG_MASK;
+      newSubtreeFlags |= child.subtreeFlags & STATIC_FLAG_MASK;
+    } else {
+      newSubtreeFlags |= child.flags;
+      newSubtreeFlags |= child.subtreeFlags;
+    }
+
     child = child.sibling;
   }
 
-  fiber.childLanes = childLanes;
+  wipFiber.childLanes = newChildLanes;
+  wipFiber.subtreeFlags = newSubtreeFlags;
 }
 
 function markUpdateLaneFromFiberToRoot(fiber: Fiber, lane: Lane): void {
@@ -474,6 +504,7 @@ function reconcileChildFiber(
       sibling: null,
       alternate: null,
       flags: FIBER_FLAG.PLACEMENT,
+      subtreeFlags: FIBER_FLAG.NONE,
       // fresh fiber, nothing to work on yet
       lanes: LANE.NONE,
       childLanes: LANE.NONE,
@@ -498,7 +529,11 @@ function getOrCreateWorkInProgressFiber(
     return pooledFiber;
   }
 
-  const freshFiber: Fiber = { ...overrides, alternate: oldFiber };
+  const freshFiber: Fiber = {
+    ...overrides,
+    alternate: oldFiber,
+    subtreeFlags: FIBER_FLAG.NONE,
+  };
   oldFiber.alternate = freshFiber;
   return freshFiber;
 }
@@ -591,14 +626,24 @@ function commitFiber(fiber: Fiber | null): void {
 
   if (hasFlag(fiber.flags, FIBER_FLAG.PLACEMENT)) {
     commitPlacementFiber(fiber);
+    // consumed — clear it so later, unrelated commits (which may read this
+    // fiber's flags again, e.g. findAttachedDomDescending searching for an
+    // anchor) don't mistake a long-settled placement for a pending one
+
+    // bailed-out fiber's reconcileChildFiber never runs for it at all this render
+    // and reconcileChildFiber is the only place that assigns a fresh .flags value
+    fiber.flags &= ~FIBER_FLAG.PLACEMENT;
   }
   if (hasFlag(fiber.flags, FIBER_FLAG.UPDATE)) {
     commitUpdateFiber(fiber);
+    fiber.flags &= ~FIBER_FLAG.UPDATE;
   }
 
-  // fiber.flags = FIBER_FLAG.NONE;
   // recursive calls
-  commitFiber(fiber.child);
+  // nothing changed anywhere below — don't even walk in
+  if (fiber.subtreeFlags !== FIBER_FLAG.NONE) {
+    commitFiber(fiber.child);
+  }
   commitFiber(fiber.sibling);
 }
 

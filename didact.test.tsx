@@ -415,3 +415,59 @@ describe("commit-phase dom lookup through a bailed-out subtree", () => {
     expect(outerDiv.children[1]).toBe(staticSpan);
   });
 });
+
+describe("commit-phase reprocessing of untouched siblings", () => {
+  const root = createMountedRoot();
+
+  function StaticFirst() {
+    return <div>first</div>;
+  }
+
+  function StaticSecond() {
+    return <h2>second</h2>;
+  }
+
+  function NestedCounter() {
+    const [count, setCount] = Didact.useState(0);
+    return (
+      <button onClick={() => setCount((c) => c + 1)}>nested: {count}</button>
+    );
+  }
+
+  function Middle() {
+    return (
+      <div>
+        <NestedCounter />
+      </div>
+    );
+  }
+
+  function App() {
+    return (
+      <div>
+        <StaticFirst />
+        <StaticSecond />
+        <Middle />
+      </div>
+    );
+  }
+
+  it("leaves untouched siblings in place when an unrelated deeply-nested update commits", async () => {
+    Didact.render(<App />, root.current);
+    await waitForRender();
+
+    const outerDiv = root.current.querySelector("div")!;
+    const first = getByText(root.current, "first");
+    const second = getByText(root.current, "second");
+
+    const button = getByText(root.current, "nested: 0");
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await waitForRender();
+
+    // first/second were never touched by this update — an unrelated
+    // update several levels deep in Middle/NestedCounter must not
+    // reposition siblings that had nothing to do with it
+    expect(Array.from(outerDiv.children).indexOf(first)).toBe(0);
+    expect(Array.from(outerDiv.children).indexOf(second)).toBe(1);
+  });
+});
