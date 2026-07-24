@@ -314,10 +314,13 @@ function bubbleProperties(fiber: Fiber): void {
 
 function markUpdateLaneFromFiberToRoot(fiber: Fiber, lane: Lane): void {
   fiber.lanes |= lane;
+  if (fiber.alternate) fiber.alternate.lanes |= lane;
 
   let ancestor = fiber.parent;
   while (ancestor) {
     ancestor.childLanes |= lane;
+    if (ancestor.alternate) ancestor.alternate.childLanes |= lane;
+
     ancestor = ancestor.parent;
   }
 }
