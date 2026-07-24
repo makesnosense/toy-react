@@ -1,5 +1,20 @@
 import * as Didact from "./didact";
 
+function NestedCounter() {
+  const [count, setCount] = Didact.useState(0);
+  return (
+    <button onClick={() => setCount((c) => c + 1)}>nested: {count}</button>
+  );
+}
+
+function Middle() {
+  return (
+    <div>
+      <NestedCounter />
+    </div>
+  );
+}
+
 function ToggleSection({ isOriginalOrder }: { isOriginalOrder: boolean }) {
   return isOriginalOrder ? <div>1. original</div> : <span>1. changed</span>;
 }
@@ -15,12 +30,16 @@ function App() {
     <div>
       <button
         style="display:block; margin-bottom:8px"
-        onClick={() => setIsOriginalOrder((previous) => !previous)}
+        onClick={() => {
+          console.log("Swap clicked");
+          setIsOriginalOrder((previous) => !previous);
+        }}
       >
         Swap
       </button>
       <ToggleSection isOriginalOrder={isOriginalOrder} />
       {unchangedHeading}
+      <Middle />
     </div>
   );
 }

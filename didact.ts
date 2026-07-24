@@ -214,6 +214,13 @@ function beginWork(wipFiber: Fiber): Fiber | null {
   const hasPendingWorkBelow = wipFiber.childLanes !== LANE.NONE;
   const hasPendingWorkOnlyBelow = !hasPendingWork && hasPendingWorkBelow;
 
+  if (typeof wipFiber.type === "function" && wipFiber.type.name === "Middle") {
+    console.log("Middle beginWork", {
+      lanes: wipFiber.lanes,
+      childLanes: wipFiber.childLanes,
+    });
+  }
+
   if (hasUnchangedProps && !hasPendingWork && !hasPendingWorkBelow) {
     // nothing anywhere in this subtree needs anything — don't even
     // walk into it; child/sibling already point at the correct,
@@ -288,7 +295,7 @@ function completeUnitOfWork(wipFiber: Fiber): Fiber | null {
   let completedFiber: Fiber | null = wipFiber;
 
   while (completedFiber) {
-    bubbleChildLanes(completedFiber);
+    bubbleProperties(completedFiber);
 
     if (completedFiber.sibling) {
       return completedFiber.sibling;
@@ -300,9 +307,16 @@ function completeUnitOfWork(wipFiber: Fiber): Fiber | null {
   return null;
 }
 
-function bubbleChildLanes(fiber: Fiber): void {
-  if (!fiber.parent) return;
-  fiber.parent.childLanes |= fiber.lanes | fiber.childLanes;
+function bubbleProperties(fiber: Fiber): void {
+  let childLanes: Lanes = LANE.NONE;
+
+  let child = fiber.child;
+  while (child) {
+    childLanes |= child.lanes | child.childLanes;
+    child = child.sibling;
+  }
+
+  fiber.childLanes = childLanes;
 }
 
 function markUpdateLaneFromFiberToRoot(fiber: Fiber, lane: Lane): void {
@@ -586,6 +600,7 @@ function commitFiber(fiber: Fiber | null): void {
     commitUpdateFiber(fiber);
   }
 
+  // fiber.flags = FIBER_FLAG.NONE;
   // recursive calls
   commitFiber(fiber.child);
   commitFiber(fiber.sibling);
