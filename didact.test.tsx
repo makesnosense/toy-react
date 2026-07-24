@@ -370,3 +370,48 @@ describe("list reconciliation with keys, dom order", () => {
     expect(labelsInDomOrder()).toEqual(["d", "c", "a", "b"]);
   });
 });
+
+describe("commit-phase dom lookup through a bailed-out subtree", () => {
+  const root = createMountedRoot();
+
+  function StaticBranch() {
+    return <span id="static-target">static</span>;
+  }
+
+  function ToggleButton() {
+    const [isB, setIsB] = Didact.useState(false);
+    return isB ? (
+      <b onClick={() => setIsB(() => false)}>b-version</b>
+    ) : (
+      <em onClick={() => setIsB(() => true)}>em-version</em>
+    );
+  }
+
+  function OuterWrapper() {
+    return (
+      <div>
+        <ToggleButton />
+        <StaticBranch />
+      </div>
+    );
+  }
+
+  it("keeps a bailed-out sibling's dom position correct after a type-changing placement", async () => {
+    Didact.render(<OuterWrapper />, root.current);
+    await waitForRender();
+
+    const em = getByText(root.current, "em-version");
+    em.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await waitForRender();
+
+    const outerDiv = root.current.querySelector("div")!;
+    const staticSpan = outerDiv.querySelector("#static-target")!;
+    const bVersion = getByText(root.current, "b-version");
+
+    // ToggleButton is listed before StaticBranch in jsx — its
+    // replacement must land in that slot, not get pushed past the
+    // untouched sibling
+    expect(outerDiv.children[0]).toBe(bVersion);
+    expect(outerDiv.children[1]).toBe(staticSpan);
+  });
+});
