@@ -471,3 +471,32 @@ describe("commit-phase reprocessing of untouched siblings", () => {
     expect(Array.from(outerDiv.children).indexOf(second)).toBe(1);
   });
 });
+
+describe("repeated updates to the same fiber", () => {
+  const root = createMountedRoot();
+
+  function NestedCounter() {
+    const [count, setCount] = Didact.useState(0);
+    return (
+      <button onClick={() => setCount((c) => c + 1)}>nested: {count}</button>
+    );
+  }
+
+  it("keeps counting correctly across three consecutive updates", async () => {
+    Didact.render(<NestedCounter />, root.current);
+    await waitForRender();
+
+    const button = root.current.querySelector("button")!;
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await waitForRender();
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await waitForRender();
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await waitForRender();
+
+    expect(button.textContent).toBe("nested: 3");
+  });
+});

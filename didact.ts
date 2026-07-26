@@ -349,7 +349,7 @@ function markUpdateLaneFromFiberToRoot(fiber: Fiber, lane: Lane): void {
   let ancestor = fiber.parent;
   while (ancestor) {
     ancestor.childLanes |= lane;
-    if (ancestor.alternate) ancestor.alternate.childLanes |= lane;
+    // if (ancestor.alternate) ancestor.alternate.childLanes |= lane; // most likely redundant
 
     ancestor = ancestor.parent;
   }
