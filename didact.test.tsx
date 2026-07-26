@@ -60,6 +60,43 @@ describe("work loop scheduling", () => {
 
     setImmediateSpy.mockRestore();
   });
+  it("yields control back to the event loop mid-render", async () => {
+    const log: string[] = [];
+    const expensiveItemDurationMs = 8; // comfortably over the 5ms time-slice budget
+    const itemCount = 2;
+
+    function ExpensiveItem({ index }: { index: number }) {
+      const start = performance.now();
+      while (performance.now() - start < expensiveItemDurationMs) {
+        // busy-wait, guarantees this single unit alone blows the budget
+      }
+      log.push(`chunk-${index}`);
+      return <div>item {index}</div>;
+    }
+
+    const expensiveItems = [];
+    for (let index = 0; index < itemCount; index++) {
+      expensiveItems.push(<ExpensiveItem key={index} index={index} />);
+    }
+
+    // what happens here
+    // render() queues the scheduler's performWorkUntilDeadline via setImmediate — call it #1.
+    // Test queues competing-task via setImmediate — #2.
+    // waitForRender() queues its own resolve via setImmediate — #3.
+
+    Didact.render(<div>{expensiveItems}</div>, containerA.current);
+
+    const nodeSetImmediate = (
+      globalThis as unknown as { setImmediate: (callback: () => void) => void }
+    ).setImmediate;
+    nodeSetImmediate(() => log.push("competing-task"));
+
+    await waitForRender();
+    expect(log).toEqual(["chunk-0", "competing-task"]);
+
+    await waitForRender();
+    expect(log).toEqual(["chunk-0", "competing-task", "chunk-1"]);
+  });
 });
 
 describe("render", () => {
