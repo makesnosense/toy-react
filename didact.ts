@@ -119,6 +119,9 @@ let nextUnitOfWork: Fiber | null = null;
 let wipRootFiber: Fiber | null = null;
 let committedRootFiber: Fiber | null = null;
 
+// snapshot of wipRootFiber's lanes at the start of the current render
+let wipRootRenderLanes: Lanes = LANE.NONE;
+
 let deletions: Fiber[] = [];
 
 // tracks which fiber is currently being rendered and which useState call
@@ -134,19 +137,25 @@ function wakeMessageLoop(): void {
 }
 
 export function render(element: DidactElement, container: HTMLElement): void {
-  scheduleNewRootFiber({
-    type: ROOT_FIBER_TYPE,
-    dom: container,
-    props: { children: [element] },
-    alternate: committedRootFiber,
-  });
+  scheduleNewRootFiber(
+    {
+      type: ROOT_FIBER_TYPE,
+      dom: container,
+      props: { children: [element] },
+      alternate: committedRootFiber,
+    },
+    LANE.DEFAULT,
+  );
 
   wakeMessageLoop();
 }
 
 function scheduleNewRootFiber(
   rootFiberInit: Pick<Fiber, "type" | "dom" | "props" | "alternate">,
+  triggeringLane: Lanes,
 ): void {
+  wipRootRenderLanes = triggeringLane;
+
   const overrides: CallerManagedFiberFields = {
     type: rootFiberInit.type,
     dom: rootFiberInit.dom,
@@ -810,7 +819,8 @@ export function useState<StateType>(
 
   const setState = (action: (prevState: StateType) => StateType) => {
     hook.queue.push(action as (prevState: unknown) => unknown);
-    markUpdateLaneFromFiberToRoot(ownerFiber, LANE.DEFAULT); // placeholder — real classification lands separately
+    const lane = LANE.DEFAULT; // placeholder — real classification lands separately
+    markUpdateLaneFromFiberToRoot(ownerFiber, lane);
 
     if (!committedRootFiber) {
       // shall never happen — setState only exists after a first render has
@@ -818,12 +828,15 @@ export function useState<StateType>(
       throw new Error("setState called before any fiber tree was committed");
     }
 
-    scheduleNewRootFiber({
-      type: committedRootFiber.type,
-      dom: committedRootFiber.dom,
-      props: committedRootFiber.props,
-      alternate: committedRootFiber,
-    });
+    scheduleNewRootFiber(
+      {
+        type: committedRootFiber.type,
+        dom: committedRootFiber.dom,
+        props: committedRootFiber.props,
+        alternate: committedRootFiber,
+      },
+      lane,
+    );
 
     wakeMessageLoop();
   };
