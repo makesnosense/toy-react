@@ -60,6 +60,7 @@ describe("work loop scheduling", () => {
 
     setImmediateSpy.mockRestore();
   });
+
   it("yields control back to the event loop mid-render", async () => {
     const log: string[] = [];
     const expensiveItemDurationMs = 8; // comfortably over the 5ms time-slice budget
@@ -96,6 +97,70 @@ describe("work loop scheduling", () => {
 
     await waitForRender();
     expect(log).toEqual(["chunk-0", "competing-task", "chunk-1"]);
+  });
+});
+
+describe("setState during an in-progress render", () => {
+  const root = createMountedRoot();
+
+  it("does not restart in-progress work, and the deferred update still lands", async () => {
+    const log: string[] = [];
+    const expensiveItemDurationMs = 8; // comfortably over the 5ms time-slice budget
+
+    function ExpensiveItem({ index }: { index: number }) {
+      const start = performance.now();
+      while (performance.now() - start < expensiveItemDurationMs) {
+        // busy-wait, guarantees this single unit alone blows the budget
+      }
+      log.push(`chunk-${index}`);
+      return <div>item {index}</div>;
+    }
+
+    let triggerCounterUpdate: (() => void) | null = null;
+
+    function Counter() {
+      const [count, setCount] = Didact.useState(0);
+      triggerCounterUpdate = () => setCount((previous) => previous + 1);
+      return <span id="count">{count}</span>;
+    }
+
+    function AppFast() {
+      return (
+        <div>
+          <Counter />
+        </div>
+      );
+    }
+
+    function AppSlow() {
+      return (
+        <div>
+          <Counter />
+          <ExpensiveItem key="0" index={0} />
+          <ExpensiveItem key="1" index={1} />
+        </div>
+      );
+    }
+
+    // mount commits fully before anything slow exists — committedRootFiber
+    // is guaranteed non-null from here on
+    Didact.render(<AppFast />, root.current);
+    await waitForRender();
+
+    Didact.render(<AppSlow />, root.current);
+    await waitForRender();
+    expect(log).toEqual(["chunk-0"]);
+
+    triggerCounterUpdate!();
+
+    await waitForRender();
+    expect(log).toEqual(["chunk-0", "chunk-1"]);
+
+    // this tick finishes remaining work and schedules counter change
+    await waitForRender();
+    // changes counter
+    await waitForRender();
+    expect(root.current.querySelector("#count")?.textContent).toBe("1");
   });
 });
 

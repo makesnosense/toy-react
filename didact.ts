@@ -624,8 +624,25 @@ function commitRootFiber(): void {
   deletions = [];
 
   commitFiber(wipRootFiber.child);
+
   committedRootFiber = wipRootFiber;
+
   wipRootFiber = null;
+  wipRootRenderLanes = LANE.NONE;
+
+  const hasLeftoverWork = committedRootFiber.childLanes !== LANE.NONE;
+  if (hasLeftoverWork) {
+    scheduleNewRootFiber(
+      {
+        type: committedRootFiber.type,
+        dom: committedRootFiber.dom,
+        props: committedRootFiber.props,
+        alternate: committedRootFiber,
+      },
+      committedRootFiber.childLanes,
+    );
+    wakeMessageLoop();
+  }
 }
 
 function commitFiber(fiber: Fiber | null): void {
@@ -834,17 +851,25 @@ export function useState<StateType>(
       throw new Error("setState called before any fiber tree was committed");
     }
 
-    scheduleNewRootFiber(
-      {
-        type: committedRootFiber.type,
-        dom: committedRootFiber.dom,
-        props: committedRootFiber.props,
-        alternate: committedRootFiber,
-      },
-      lane,
-    );
+    const isRenderInProgress = nextUnitOfWork !== null;
 
-    wakeMessageLoop();
+    const isHigherPriorityLane =
+      lane < getHighestPriorityLane(wipRootRenderLanes);
+    const shouldInterruptInProgressRender =
+      isRenderInProgress && isHigherPriorityLane;
+
+    if (!isRenderInProgress || shouldInterruptInProgressRender) {
+      scheduleNewRootFiber(
+        {
+          type: committedRootFiber.type,
+          dom: committedRootFiber.dom,
+          props: committedRootFiber.props,
+          alternate: committedRootFiber,
+        },
+        lane,
+      );
+      wakeMessageLoop();
+    }
   };
 
   renderingFiber.hooks.push(hook);
