@@ -789,6 +789,12 @@ function findAncestorFiberWithDom(fiber: Fiber | null): FiberWithDom {
   return findAncestorFiberWithDom(fiber.parent);
 }
 
+// isolates the lowest set bit — since lane values are ordered smallest =
+// most urgent, this is the highest-priority lane in a merged set
+function getHighestPriorityLane(lanes: Lanes): Lane {
+  return (lanes & -lanes) as Lane;
+}
+
 export function useState<StateType>(
   initialState: StateType,
 ): [StateType, (action: (prevState: StateType) => StateType) => void] {
