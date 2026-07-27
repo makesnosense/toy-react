@@ -117,7 +117,7 @@ let isMessageLoopRunning = false;
 let nextUnitOfWork: Fiber | null = null;
 
 let wipRootFiber: Fiber | null = null;
-let currentRootFiber: Fiber | null = null;
+let committedRootFiber: Fiber | null = null;
 
 let deletions: Fiber[] = [];
 
@@ -138,7 +138,7 @@ export function render(element: DidactElement, container: HTMLElement): void {
     type: ROOT_FIBER_TYPE,
     dom: container,
     props: { children: [element] },
-    alternate: currentRootFiber,
+    alternate: committedRootFiber,
   });
 
   wakeMessageLoop();
@@ -615,7 +615,7 @@ function commitRootFiber(): void {
   deletions = [];
 
   commitFiber(wipRootFiber.child);
-  currentRootFiber = wipRootFiber;
+  committedRootFiber = wipRootFiber;
   wipRootFiber = null;
 }
 
@@ -812,17 +812,17 @@ export function useState<StateType>(
     hook.queue.push(action as (prevState: unknown) => unknown);
     markUpdateLaneFromFiberToRoot(ownerFiber, LANE.DEFAULT); // placeholder — real classification lands separately
 
-    if (!currentRootFiber) {
+    if (!committedRootFiber) {
       // shall never happen — setState only exists after a first render has
-      // completed, which always sets currentRootFiber
+      // completed, which always sets committedRootFiber
       throw new Error("setState called before any fiber tree was committed");
     }
 
     scheduleNewRootFiber({
-      type: currentRootFiber.type,
-      dom: currentRootFiber.dom,
-      props: currentRootFiber.props,
-      alternate: currentRootFiber,
+      type: committedRootFiber.type,
+      dom: committedRootFiber.dom,
+      props: committedRootFiber.props,
+      alternate: committedRootFiber,
     });
 
     wakeMessageLoop();
