@@ -54,7 +54,7 @@ function markDiscreteEventEnd(): void {
   isInsideDiscreteEvent = false;
 }
 
-// scoped to document rather than the root container — didact is
+// scoped to document rather than the root container — toy react is
 // single-root, so there's no cross-root isolation concern real react's
 // root-scoped listeners exist to solve. revisit if that changes.
 DISCRETE_EVENT_TYPES.forEach((eventType) => {
@@ -67,19 +67,19 @@ DISCRETE_EVENT_TYPES.forEach((eventType) => {
 });
 // ################################
 
-type DidactFunctionComponent = (
-  props: DidactElementProps,
-) => DidactElement | boolean | null;
+type ToyReactFunctionComponent = (
+  props: ToyReactElementProps,
+) => ToyReactElement | boolean | null;
 
-interface DidactElement {
-  type: string | DidactFunctionComponent;
+interface ToyReactElement {
+  type: string | ToyReactFunctionComponent;
   key: string | number | null;
-  props: DidactElementProps;
+  props: ToyReactElementProps;
 }
 
-interface DidactElementProps {
+interface ToyReactElementProps {
   [key: string]: unknown;
-  children: (DidactElement | RendersNothing)[];
+  children: (ToyReactElement | RendersNothing)[];
 }
 
 // occupies a child position but produces no fiber — react's own semantic
@@ -88,15 +88,15 @@ type RendersNothing = boolean | null | undefined;
 
 // names the category "a thing that can occupy a renderable position"
 // agnostic to whether the specific instance is object-shaped or primitive-shaped.
-type DidactNode = DidactElement | string | number | RendersNothing;
+type ToyReactNode = ToyReactElement | string | number | RendersNothing;
 
 const ROOT_FIBER_TYPE = "ROOT_FIBER";
 
 interface Fiber {
-  type: DidactElement["type"];
+  type: ToyReactElement["type"];
   key: string | number | null;
   index: number;
-  props: DidactElementProps;
+  props: ToyReactElementProps;
   dom: HTMLElement | Text | null;
   flags: number;
   subtreeFlags: number;
@@ -181,7 +181,7 @@ function wakeMessageLoop(): void {
   scheduleWorkUntilDeadline(performWorkUntilDeadline);
 }
 
-export function render(element: DidactElement, container: HTMLElement): void {
+export function render(element: ToyReactElement, container: HTMLElement): void {
   scheduleNewRootFiber(
     {
       type: ROOT_FIBER_TYPE,
@@ -368,7 +368,7 @@ function bubbleProperties(wipFiber: Fiber): void {
   // union of flags whose lifetime is tied to the fiber's own code (e.g.
   // "has an effect hook"), not to a single render — only these are
   // trustworthy through a bailout. mirrors real react's StaticMask;
-  // didact has no such flags yet, so this is empty for now.
+  // toy react has no such flags yet, so this is empty for now.
   const STATIC_FLAG_MASK = 0b0000;
 
   let newChildLanes: Lanes = LANE.NONE;
@@ -443,7 +443,7 @@ function updateHostComponent(wipFiber: Fiber) {
 
 function reconcileChildren(
   wipFiber: Fiber,
-  childElements: (DidactElement | RendersNothing)[],
+  childElements: (ToyReactElement | RendersNothing)[],
 ): void {
   // clear existing child
   wipFiber.child = null;
@@ -522,7 +522,7 @@ function createOldChildFibersMapByKey(
 
 function reconcileChildFiber(
   matchedOldChildFiber: Fiber | null,
-  childElement: DidactElement,
+  childElement: ToyReactElement,
   parentFiber: Fiber,
   index: number,
 ): Fiber {
@@ -618,8 +618,8 @@ function createDom(fiber: Fiber): HTMLElement | Text {
 
 function updateDom(
   dom: HTMLElement | Text,
-  prevProps: DidactElementProps,
-  nextProps: DidactElementProps,
+  prevProps: ToyReactElementProps,
+  nextProps: ToyReactElementProps,
 ): void {
   const isEventListenerProp = (key: string) => key.startsWith("on");
   const isProperty = (key: string) =>
@@ -938,10 +938,10 @@ export function useState<StateType>(
 // produces the element tree that render()/performUnitOfWork() consume.
 
 export function createElement(
-  type: DidactElement["type"],
+  type: ToyReactElement["type"],
   props: Record<string, unknown> | null,
-  ...children: DidactNode[]
-): DidactElement {
+  ...children: ToyReactNode[]
+): ToyReactElement {
   const { key: rawKey = null, ...restProps } = props ?? {};
   const key = toElementKey(rawKey);
   return {
@@ -971,7 +971,7 @@ function toElementKey(value: unknown): string | number | null {
   return null;
 }
 
-export function createTextElement(child: string | number): DidactElement {
+export function createTextElement(child: string | number): ToyReactElement {
   return {
     type: "TEXT_ELEMENT",
     key: null,

@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react",
-    "jsxFactory": "Didact.createElement",
+    "jsxFactory": "ToyReact.createElement",
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,

@@ -1,7 +1,7 @@
-import * as Didact from "./didact";
+import * as ToyReact from "./toy-react";
 
 function NestedCounter() {
-  const [count, setCount] = Didact.useState(0);
+  const [count, setCount] = ToyReact.useState(0);
   return (
     <button onClick={() => setCount((c) => c + 1)}>nested: {count}</button>
   );
@@ -24,7 +24,7 @@ const unchangedHeading = (
 );
 
 function App() {
-  const [isOriginalOrder, setIsOriginalOrder] = Didact.useState(true);
+  const [isOriginalOrder, setIsOriginalOrder] = ToyReact.useState(true);
 
   return (
     <div>
@@ -47,8 +47,8 @@ function App() {
 const root = document.getElementById("root");
 
 if (root) {
-  Didact.render(<App />, root);
+  ToyReact.render(<App />, root);
 }
 
-(window as any).Didact = Didact;
+(window as any).ToyReact = ToyReact;
 (window as any).container = root;

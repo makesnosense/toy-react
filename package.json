@@ -1,5 +1,5 @@
 {
-  "name": "didact",
+  "name": "toy-react",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest"

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, getByText } from "@testing-library/dom";
-import * as Didact from "./didact";
+import * as ToyReact from "./toy-react";
 
 // one macrotask tick
 const waitForRender = () =>
@@ -46,10 +46,10 @@ describe("work loop scheduling", () => {
     const setImmediateSpy = vi.spyOn(nodeGlobal, "setImmediate");
 
     vi.resetModules();
-    const Didact = await import("./didact");
+    const ToyReact = await import("./toy-react");
 
-    Didact.render(<div />, containerA.current);
-    Didact.render(<div />, containerB.current);
+    ToyReact.render(<div />, containerA.current);
+    ToyReact.render(<div />, containerB.current);
 
     expect(setImmediateSpy).toHaveBeenCalledTimes(1);
 
@@ -85,7 +85,7 @@ describe("work loop scheduling", () => {
     // Test queues competing-task via setImmediate — #2.
     // waitForRender() queues its own resolve via setImmediate — #3.
 
-    Didact.render(<div>{expensiveItems}</div>, containerA.current);
+    ToyReact.render(<div>{expensiveItems}</div>, containerA.current);
 
     const nodeSetImmediate = (
       globalThis as unknown as { setImmediate: (callback: () => void) => void }
@@ -119,7 +119,7 @@ describe("setState during an in-progress render", () => {
     let triggerCounterUpdate: (() => void) | null = null;
 
     function Counter() {
-      const [count, setCount] = Didact.useState(0);
+      const [count, setCount] = ToyReact.useState(0);
       triggerCounterUpdate = () => setCount((previous) => previous + 1);
       return <span id="count">{count}</span>;
     }
@@ -144,10 +144,10 @@ describe("setState during an in-progress render", () => {
 
     // mount commits fully before anything slow exists — committedRootFiber
     // is guaranteed non-null from here on
-    Didact.render(<AppFast />, root.current);
+    ToyReact.render(<AppFast />, root.current);
     await waitForRender();
 
-    Didact.render(<AppSlow />, root.current);
+    ToyReact.render(<AppSlow />, root.current);
     await waitForRender();
     expect(log).toEqual(["chunk-0"]);
 
@@ -188,8 +188,8 @@ describe("discrete events interrupt an in-progress render", () => {
     let showSlowSection: (() => void) | null = null;
 
     function App() {
-      const [slow, setSlow] = Didact.useState(false);
-      const [clicked, setClicked] = Didact.useState(false);
+      const [slow, setSlow] = ToyReact.useState(false);
+      const [clicked, setClicked] = ToyReact.useState(false);
       showSlowSection = () => setSlow(() => true);
 
       return (
@@ -205,7 +205,7 @@ describe("discrete events interrupt an in-progress render", () => {
     }
     // mount commits fully before anything slow exists — committedRootFiber
     // is guaranteed non-null from here on
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     showSlowSection!(); // DEFAULT priority — a direct call, not a native event
@@ -237,13 +237,13 @@ describe("two sequential different priority updates before either flushes", () =
   let triggerLowPriorityUpdate: (() => void) | null = null;
 
   function LowPriorityComponent() {
-    const [value, setValue] = Didact.useState("low-initial");
+    const [value, setValue] = ToyReact.useState("low-initial");
     triggerLowPriorityUpdate = () => setValue(() => "low-updated");
     return <span id="low">{value}</span>;
   }
 
   function HighPriorityComponent() {
-    const [value, setValue] = Didact.useState("high-initial");
+    const [value, setValue] = ToyReact.useState("high-initial");
     return (
       <button id="high-trigger" onClick={() => setValue(() => "high-updated")}>
         <span id="high">{value}</span>
@@ -261,7 +261,7 @@ describe("two sequential different priority updates before either flushes", () =
   }
 
   it("applies a default-lane update and a discrete-lane update scheduled back-to-back, before either flushes", async () => {
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     // default-lane update — fired outside any discrete event
@@ -292,7 +292,7 @@ describe("render", () => {
   }
 
   it("renders nested host elements to the dom", async () => {
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     expect(root.current.querySelector("h1")?.textContent).toBe("hello");
@@ -317,7 +317,7 @@ describe("components and expressions that render nothing", () => {
       );
     }
 
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     const outerDiv = root.current.querySelector("div")!;
@@ -330,7 +330,7 @@ describe("components and expressions that render nothing", () => {
     let toggleShown: (() => void) | null = null;
 
     function App() {
-      const [shown, setShown] = Didact.useState(false);
+      const [shown, setShown] = ToyReact.useState(false);
       toggleShown = () => setShown((previous) => !previous);
 
       return (
@@ -342,7 +342,7 @@ describe("components and expressions that render nothing", () => {
       );
     }
 
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     const outerDiv = root.current.querySelector("div")!;
@@ -378,7 +378,7 @@ describe("dom insertion order", () => {
   }
 
   function App() {
-    const [showAsDiv, setShowAsDiv] = Didact.useState(true);
+    const [showAsDiv, setShowAsDiv] = ToyReact.useState(true);
     return (
       <div>
         <button onClick={() => setShowAsDiv((previous) => !previous)}>
@@ -391,7 +391,7 @@ describe("dom insertion order", () => {
   }
 
   it("keeps siblings in order when a nested component's child changes type", async () => {
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     const outerDiv = root.current.querySelector("div")!;
@@ -412,8 +412,8 @@ describe("multiple hooks in one component", () => {
   const root = createMountedRoot();
 
   function Counters() {
-    const [count, setCount] = Didact.useState(0);
-    const [label, setLabel] = Didact.useState("a");
+    const [count, setCount] = ToyReact.useState(0);
+    const [label, setLabel] = ToyReact.useState("a");
 
     return (
       <div>
@@ -436,7 +436,7 @@ describe("multiple hooks in one component", () => {
   }
 
   it("keeps each useState call's state independent across updates", async () => {
-    Didact.render(<Counters />, root.current);
+    ToyReact.render(<Counters />, root.current);
     await waitForRender();
 
     expect(root.current.querySelector("#countValue")?.textContent).toBe("0");
@@ -462,7 +462,7 @@ describe("multiple components using hooks", () => {
   const root = createMountedRoot();
 
   function Counter({ id }: { id: string }) {
-    const [count, setCount] = Didact.useState(0);
+    const [count, setCount] = ToyReact.useState(0);
     return (
       <button id={id} onClick={() => setCount((previous) => previous + 1)}>
         {count}
@@ -480,7 +480,7 @@ describe("multiple components using hooks", () => {
   }
 
   it("keeps state independent across separate instances of the same component", async () => {
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     expect(root.current.querySelector("#first")?.textContent).toBe("0");
@@ -500,7 +500,7 @@ describe("list reconciliation with keys", () => {
   const root = createMountedRoot();
 
   function Counter({ label }: { label: string }) {
-    const [count, setCount] = Didact.useState(0);
+    const [count, setCount] = ToyReact.useState(0);
     return (
       <div>
         <span>{label}</span>
@@ -512,7 +512,7 @@ describe("list reconciliation with keys", () => {
   }
 
   function CounterList() {
-    const [labels, setLabels] = Didact.useState(["a", "b"]);
+    const [labels, setLabels] = ToyReact.useState(["a", "b"]);
 
     return (
       <div>
@@ -535,7 +535,7 @@ describe("list reconciliation with keys", () => {
     getByText(root.current, label).closest("div")!;
 
   it("keeps each counter's state attached to its item when the list is reordered", async () => {
-    Didact.render(<CounterList />, root.current);
+    ToyReact.render(<CounterList />, root.current);
     await waitForRender();
 
     // click a 4 times
@@ -573,7 +573,7 @@ describe("list reconciliation with keys, dom order", () => {
   const root = createMountedRoot();
 
   function Counter({ label }: { label: string }) {
-    const [count, setCount] = Didact.useState(0);
+    const [count, setCount] = ToyReact.useState(0);
     return (
       <div>
         <span>{label}</span>
@@ -585,7 +585,7 @@ describe("list reconciliation with keys, dom order", () => {
   }
 
   function CounterList() {
-    const [labels, setLabels] = Didact.useState(["a", "b"]);
+    const [labels, setLabels] = ToyReact.useState(["a", "b"]);
 
     return (
       <div>
@@ -605,7 +605,7 @@ describe("list reconciliation with keys, dom order", () => {
   }
 
   it("actually reorders the dom, not just the attached state", async () => {
-    Didact.render(<CounterList />, root.current);
+    ToyReact.render(<CounterList />, root.current);
     await waitForRender();
 
     const listElement = root.current.querySelector("#list")!;
@@ -624,7 +624,7 @@ describe("list reconciliation with keys, dom order", () => {
 
   it("finds the correct anchor when multiple items move past each other", async () => {
     function ReorderableList() {
-      const [labels, setLabels] = Didact.useState(["a", "b", "c", "d"]);
+      const [labels, setLabels] = ToyReact.useState(["a", "b", "c", "d"]);
       return (
         <div>
           <button
@@ -642,7 +642,7 @@ describe("list reconciliation with keys, dom order", () => {
       );
     }
 
-    Didact.render(<ReorderableList />, root.current);
+    ToyReact.render(<ReorderableList />, root.current);
     await waitForRender();
 
     const listElement = root.current.querySelector("#list")!;
@@ -668,7 +668,7 @@ describe("commit-phase dom lookup through a bailed-out subtree", () => {
   }
 
   function ToggleButton() {
-    const [isB, setIsB] = Didact.useState(false);
+    const [isB, setIsB] = ToyReact.useState(false);
     return isB ? (
       <b onClick={() => setIsB(() => false)}>b-version</b>
     ) : (
@@ -686,7 +686,7 @@ describe("commit-phase dom lookup through a bailed-out subtree", () => {
   }
 
   it("keeps a bailed-out sibling's dom position correct after a type-changing placement", async () => {
-    Didact.render(<OuterWrapper />, root.current);
+    ToyReact.render(<OuterWrapper />, root.current);
     await waitForRender();
 
     const em = getByText(root.current, "em-version");
@@ -717,7 +717,7 @@ describe("commit-phase reprocessing of untouched siblings", () => {
   }
 
   function NestedCounter() {
-    const [count, setCount] = Didact.useState(0);
+    const [count, setCount] = ToyReact.useState(0);
     return (
       <button onClick={() => setCount((c) => c + 1)}>nested: {count}</button>
     );
@@ -742,7 +742,7 @@ describe("commit-phase reprocessing of untouched siblings", () => {
   }
 
   it("leaves untouched siblings in place when an unrelated deeply-nested update commits", async () => {
-    Didact.render(<App />, root.current);
+    ToyReact.render(<App />, root.current);
     await waitForRender();
 
     const outerDiv = root.current.querySelector("div")!;
@@ -765,14 +765,14 @@ describe("repeated updates to the same fiber", () => {
   const root = createMountedRoot();
 
   function NestedCounter() {
-    const [count, setCount] = Didact.useState(0);
+    const [count, setCount] = ToyReact.useState(0);
     return (
       <button onClick={() => setCount((c) => c + 1)}>nested: {count}</button>
     );
   }
 
   it("keeps counting correctly across three consecutive updates", async () => {
-    Didact.render(<NestedCounter />, root.current);
+    ToyReact.render(<NestedCounter />, root.current);
     await waitForRender();
 
     const button = root.current.querySelector("button")!;

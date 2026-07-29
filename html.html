@@ -16,7 +16,7 @@
         const { code } = Babel.transform(source, {
           presets: [
             "typescript",
-            ["react", { runtime: "classic", pragma: "Didact.createElement" }],
+            ["react", { runtime: "classic", pragma: "ToyReact.createElement" }],
           ],
           filename: path,
         });
@@ -34,10 +34,10 @@
       }
 
       async function loadApp() {
-        const didactCode = await transpile("./didact.ts");
-        const didactUrl = toModuleUrl(didactCode);
+        const toyReactCode = await transpile("./toy-react.ts");
+        const toyReactUrl = toModuleUrl(toyReactCode);
 
-        // a bundler rewrites "./didact" to the right module reference;
+        // a bundler rewrites "./toy-react" to the right module reference;
         // here we do that exact rewrite by hand, with a plain string replace
         const mainCodeRaw = await transpile("./main.tsx");
         // console.log(
@@ -46,7 +46,7 @@
         //   mainCodeRaw,
         //   "\n\n",
         // );
-        const mainCode = mainCodeRaw.replace("./didact", didactUrl);
+        const mainCode = mainCodeRaw.replace("./toy-react", toyReactUrl);
 
         // this could have been
 
