@@ -218,7 +218,7 @@ describe("discrete events interrupt an in-progress render", () => {
 
     // DISCRETE priority — a real click, dispatched synchronously, while the
     // slow-section render is still yielded mid-pass
-    fireEvent.click(root.current.querySelector("div")!);
+    fireEvent.click(root.current.querySelector("#trigger")!);
 
     await waitForRender();
     // restart signature: chunk-0 runs again — and "click" appears before it,
