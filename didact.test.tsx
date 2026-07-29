@@ -231,6 +231,55 @@ describe("discrete events interrupt an in-progress render", () => {
   });
 });
 
+describe("two sequential different priority updates before either flushes", () => {
+  const root = createMountedRoot();
+
+  let triggerLowPriorityUpdate: (() => void) | null = null;
+
+  function LowPriorityComponent() {
+    const [value, setValue] = Didact.useState("low-initial");
+    triggerLowPriorityUpdate = () => setValue(() => "low-updated");
+    return <span id="low">{value}</span>;
+  }
+
+  function HighPriorityComponent() {
+    const [value, setValue] = Didact.useState("high-initial");
+    return (
+      <button id="high-trigger" onClick={() => setValue(() => "high-updated")}>
+        <span id="high">{value}</span>
+      </button>
+    );
+  }
+
+  function App() {
+    return (
+      <div>
+        <LowPriorityComponent />
+        <HighPriorityComponent />
+      </div>
+    );
+  }
+
+  it("applies a default-lane update and a discrete-lane update scheduled back-to-back, before either flushes", async () => {
+    Didact.render(<App />, root.current);
+    await waitForRender();
+
+    // default-lane update — fired outside any discrete event
+    triggerLowPriorityUpdate!();
+
+    // discrete-lane update — fired synchronously right after, in the
+    // same tick, before the message loop has run any work for the first
+    root.current.querySelector<HTMLButtonElement>("#high-trigger")!.click();
+
+    await waitForRender();
+
+    expect(root.current.querySelector("#low")?.textContent).toBe("low-updated");
+    expect(root.current.querySelector("#high")?.textContent).toBe(
+      "high-updated",
+    );
+  });
+});
+
 describe("render", () => {
   const root = createMountedRoot();
 
