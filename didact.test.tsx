@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getByText } from "@testing-library/dom";
+import { fireEvent, getByText } from "@testing-library/dom";
 import * as Didact from "./didact";
 
 // one macrotask tick
@@ -161,6 +161,73 @@ describe("setState during an in-progress render", () => {
     // changes counter
     await waitForRender();
     expect(root.current.querySelector("#count")?.textContent).toBe("1");
+  });
+});
+
+describe("discrete events interrupt an in-progress render", () => {
+  const root = createMountedRoot();
+
+  it("discards in-progress work and restarts when a discrete update arrives", async () => {
+    const log: string[] = [];
+    const expensiveItemDurationMs = 8; // comfortably over the 5ms time-slice budget
+
+    function ExpensiveItem({ index }: { index: number }) {
+      const start = performance.now();
+      while (performance.now() - start < expensiveItemDurationMs) {
+        // busy-wait, guarantees this single unit alone blows the budget
+      }
+      log.push(`chunk-${index}`);
+      return <div>item {index}</div>;
+    }
+
+    function ClickMarker() {
+      log.push("click");
+      return null;
+    }
+
+    let showSlowSection: (() => void) | null = null;
+
+    function App() {
+      const [slow, setSlow] = Didact.useState(false);
+      const [clicked, setClicked] = Didact.useState(false);
+      showSlowSection = () => setSlow(() => true);
+
+      return (
+        <div>
+          <button id="trigger" onClick={() => setClicked(() => true)}>
+            click
+          </button>
+          {clicked && <ClickMarker />}
+          {slow && <ExpensiveItem key="0" index={0} />}
+          {slow && <ExpensiveItem key="1" index={1} />}
+        </div>
+      );
+    }
+    // mount commits fully before anything slow exists — committedRootFiber
+    // is guaranteed non-null from here on
+    Didact.render(<App />, root.current);
+    await waitForRender();
+
+    showSlowSection!(); // DEFAULT priority — a direct call, not a native event
+
+    // The await waitForRender() in between is what forces the slow pass to actually run —
+    // execute ExpensiveItem's busy-wait, log "chunk-0",
+    // hit the 5ms budget, and yield with nextUnitOfWork genuinely mid-chain
+    await waitForRender();
+    expect(log).toEqual(["chunk-0"]);
+
+    // DISCRETE priority — a real click, dispatched synchronously, while the
+    // slow-section render is still yielded mid-pass
+    fireEvent.click(root.current.querySelector("div")!);
+
+    await waitForRender();
+    // restart signature: chunk-0 runs again — and "click" appears before it,
+    // proving the click's state landed inside the very pass that restarted,
+    // not a pass after
+    expect(log).toEqual(["chunk-0", "click", "chunk-0"]);
+
+    await waitForRender();
+    expect(log).toEqual(["chunk-0", "click", "chunk-0", "chunk-1"]);
   });
 });
 

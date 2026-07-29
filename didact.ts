@@ -29,6 +29,43 @@ if ("setImmediate" in globalThis) {
     setTimeout(performWorkUntilDeadline, 0);
 }
 
+// ################################
+// EVENTS
+
+// event types classified as user-initiated, discrete priority — mirrors
+// react's default classification. anything outside a native event of one
+// of these types (a timer, a promise) falls through to LANE.DEFAULT.
+const DISCRETE_EVENT_TYPES = new Set([
+  "click",
+  "keydown",
+  "keyup",
+  "input",
+  "change",
+  "submit",
+]);
+
+let isInsideDiscreteEvent = false;
+
+function markDiscreteEventStart(): void {
+  isInsideDiscreteEvent = true;
+}
+
+function markDiscreteEventEnd(): void {
+  isInsideDiscreteEvent = false;
+}
+
+// scoped to document rather than the root container — didact is
+// single-root, so there's no cross-root isolation concern real react's
+// root-scoped listeners exist to solve. revisit if that changes.
+DISCRETE_EVENT_TYPES.forEach((eventType) => {
+  document.addEventListener(eventType, markDiscreteEventStart, {
+    capture: true,
+  });
+  document.addEventListener(eventType, markDiscreteEventEnd, {
+    capture: false,
+  });
+});
+// ################################
 
 type DidactFunctionComponent = (
   props: DidactElementProps,
@@ -859,7 +896,8 @@ export function useState<StateType>(
 
   const setState = (action: (prevState: StateType) => StateType) => {
     hook.queue.push(action as (prevState: unknown) => unknown);
-    const lane = LANE.DEFAULT; // placeholder — real classification lands separately
+    // const lane = LANE.DEFAULT;
+    const lane = isInsideDiscreteEvent ? LANE.DISCRETE : LANE.DEFAULT;
     markUpdateLaneFromFiberToRoot(ownerFiber, lane);
 
     if (!committedRootFiber) {
