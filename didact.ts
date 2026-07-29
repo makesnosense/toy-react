@@ -451,7 +451,8 @@ function reconcileChildren(
       }
     }
 
-    if (childElementIndex === 0) {
+    if (!prevSiblingOfNewChildFiber) // leftmost child
+    {
       wipFiber.child = newChildFiber;
     } else {
       prevSiblingOfNewChildFiber!.sibling = newChildFiber;
