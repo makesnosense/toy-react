@@ -29,7 +29,10 @@ if ("setImmediate" in globalThis) {
     setTimeout(performWorkUntilDeadline, 0);
 }
 
-type DidactFunctionComponent = (props: DidactElementProps) => DidactElement;
+
+type DidactFunctionComponent = (
+  props: DidactElementProps,
+) => DidactElement | boolean | null;
 
 interface DidactElement {
   type: string | DidactFunctionComponent;
@@ -39,11 +42,16 @@ interface DidactElement {
 
 interface DidactElementProps {
   [key: string]: unknown;
-  children: DidactElement[];
+  children: (DidactElement | RendersNothing)[];
 }
+
+// occupies a child position but produces no fiber — react's own semantic
+// for {condition && <X/>} and a component's own `return null`
+type RendersNothing = boolean | null | undefined;
+
 // names the category "a thing that can occupy a renderable position"
 // agnostic to whether the specific instance is object-shaped or primitive-shaped.
-type DidactNode = DidactElement | string | number;
+type DidactNode = DidactElement | string | number | RendersNothing;
 
 const ROOT_FIBER_TYPE = "ROOT_FIBER";
 
@@ -398,7 +406,7 @@ function updateHostComponent(wipFiber: Fiber) {
 
 function reconcileChildren(
   wipFiber: Fiber,
-  childElements: DidactElement[],
+  childElements: (DidactElement | RendersNothing)[],
 ): void {
   // clear existing child
   wipFiber.child = null;
@@ -410,6 +418,14 @@ function reconcileChildren(
   let highestStableOldFiberIndex = 0;
 
   childElements.forEach((childElement, childElementIndex) => {
+    if (
+      childElement === null ||
+      childElement === undefined ||
+      typeof childElement === "boolean"
+    ) {
+      return;
+    }
+
     const reconciliationKey = childElement.key ?? childElementIndex;
     const matchedOldChildFiber =
       oldChildFibersMapByKey.get(reconciliationKey) ?? null;
@@ -901,7 +917,9 @@ export function createElement(
       children: children
         .flat(Infinity)
         .map((child) =>
-          typeof child === "object" ? child : createTextElement(child),
+          typeof child === "string" || typeof child === "number"
+            ? createTextElement(child)
+            : child,
         ),
     },
   };

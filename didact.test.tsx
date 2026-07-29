@@ -183,6 +183,77 @@ describe("render", () => {
   });
 });
 
+describe("components and expressions that render nothing", () => {
+  const root = createMountedRoot();
+
+  function Empty() {
+    return null;
+  }
+
+  it("mounts a component that returns null without crashing, and it renders nothing", async () => {
+    function App() {
+      return (
+        <div>
+          <span>before</span>
+          <Empty />
+          <span>after</span>
+        </div>
+      );
+    }
+
+    Didact.render(<App />, root.current);
+    await waitForRender();
+
+    const outerDiv = root.current.querySelector("div")!;
+    expect(
+      Array.from(outerDiv.childNodes).map((node) => node.textContent),
+    ).toEqual(["before", "after"]);
+  });
+
+  it("renders nothing for a boolean child, in both directions, with no stray text node", async () => {
+    let toggleShown: (() => void) | null = null;
+
+    function App() {
+      const [shown, setShown] = Didact.useState(false);
+      toggleShown = () => setShown((previous) => !previous);
+
+      return (
+        <div>
+          <span>before</span>
+          {shown && <span id="conditional">shown</span>}
+          <span>after</span>
+        </div>
+      );
+    }
+
+    Didact.render(<App />, root.current);
+    await waitForRender();
+
+    const outerDiv = root.current.querySelector("div")!;
+    // mount, condition false — no stray "false" text node between the spans
+    expect(
+      Array.from(outerDiv.childNodes).map((node) => node.textContent),
+    ).toEqual(["before", "after"]);
+    expect(outerDiv.querySelector("#conditional")).toBeNull();
+
+    toggleShown!();
+    await waitForRender();
+
+    // update, condition true — the conditional element actually mounts
+    expect(
+      Array.from(outerDiv.childNodes).map((node) => node.textContent),
+    ).toEqual(["before", "shown", "after"]);
+
+    toggleShown!();
+    await waitForRender();
+
+    // update, condition false again — it's actually removed, not just hidden
+    expect(
+      Array.from(outerDiv.childNodes).map((node) => node.textContent),
+    ).toEqual(["before", "after"]);
+  });
+});
+
 describe("dom insertion order", () => {
   const root = createMountedRoot();
 
