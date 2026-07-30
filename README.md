@@ -1,17 +1,24 @@
+<img src="./logo.png" alt="toy react logo" width="120" />
+
 # Toy React
 
 Rebuilding React from scratch to finally understand what is there under the hood.
 
-Started as a follow-along to [Build your own React](https://pomb.us/build-your-own-react/).
+Started as a follow-along to [Build your own React](https://pomb.us/build-your-own-react/) and grew beyond "just adding types."
 
-## Beyond the tutorial
+The goal wasn't to clone all of React – it was to get its core mechanics and design decisions right: fibers, lanes, scheduling, reconciliation – without the surface area of a production framework.
 
-- Added TypeScript types throughout
-- Scheduler backed by `MessageChannel` (with `setImmediate`/`setTimeout` fallback)
-- Lanes-based priority model (`LANE` bitmask, `lanes`/`childLanes` on fibers)
-- Fiber pooling (`getOrCreateWorkInProgressFiber`) instead of a fresh tree per render
-- Keyed reconciliation with a two-pass, map-based diff
-- Vitest + jsdom test suite
+## What's implemented
+
+- **Core API** – `createElement` / JSX
+- **Hooks** – `useState`
+- **Reconciler**
+  - Fiber tree, work loop – `performUnitOfWork`, `beginWork`, `completeUnitOfWork`
+  - Lanes-based priority – `markUpdateLaneFromFiberToRoot`, `childLanes` bubbling
+  - Fiber pooling – `getOrCreateWorkInProgressFiber`
+  - Keyed reconciliation
+- **Renderer (host config)** – `createDom`, `updateDom`, `commitRootFiber`
+- **Scheduler** – `MessageChannel`-backed work loop (`performWorkUntilDeadline`, `scheduleWorkUntilDeadline`), 5ms time-slice budget
 
 ## Planned
 
@@ -20,5 +27,4 @@ Started as a follow-along to [Build your own React](https://pomb.us/build-your-o
 
 ## Credit
 
-Structurally based on [pomber/didact](https://github.com/pomber/didact) (MIT).
-See `LICENSE`.
+Structurally based on [pomber/didact](https://github.com/pomber/didact)
