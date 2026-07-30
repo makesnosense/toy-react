@@ -1,4 +1,4 @@
-<img src="./logo.png" alt="toy react logo" width="120" />
+<img src="./logo.png" alt="toy react logo" width="144" />
 
 # Toy React
 
