@@ -20,6 +20,8 @@ The goal wasn't to clone all of React – it was to get its core mechanics and d
 - **Renderer (host config)** – `createDom`, `updateDom`, `commitRootFiber`
 - **Scheduler** – `MessageChannel`-backed work loop (`performWorkUntilDeadline`, `scheduleWorkUntilDeadline`), 5ms time-slice budget
 
+Some test coverage for reconciler, hooks, DOM output.
+
 ## Planned
 
 - Effects (`useEffect`)
