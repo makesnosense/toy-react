@@ -2,7 +2,7 @@
 
 # Toy React
 
-Rebuilding React from scratch to finally understand what is there under the hood.
+Rebuilding React from scratch to finally understand what's inside.
 
 Started as a follow-along to [Build your own React](https://pomb.us/build-your-own-react/) and grew beyond "just adding types."
 
