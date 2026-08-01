@@ -1016,7 +1016,15 @@ export function createElement(
   props: Record<string, unknown> | null,
   ...children: ToyReactNode[]
 ): ToyReactElement {
-  const { key: rawKey = null, ...restProps } = props ?? {};
+  const {
+    key: rawKey = null,
+    // babel's dev-mode jsx transform injects these two into every createElement
+    // call, causing creation of new object inplace each render so we strip them
+    __self,
+    __source,
+
+    ...restProps
+  } = props ?? {};
   const key = toElementKey(rawKey);
 
   // we need to flatten the array for the case it was something like
