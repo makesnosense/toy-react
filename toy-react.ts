@@ -71,8 +71,22 @@ type ToyReactFunctionComponent = (
   props: ToyReactElementProps,
 ) => ToyReactElement | boolean | null;
 
+interface MemoComponent<Props = any> {
+  // exists purely so TS's JSX checker accepts a memo-wrapped component as
+  // a component type — never actually invoked. real React's ExoticComponent
+  // does the same thing
+  (props: Props): ToyReactElement | boolean | null;
+  type: ToyReactFunctionComponent;
+  compare:
+    | ((
+        prevProps: ToyReactElementProps,
+        nextProps: ToyReactElementProps,
+      ) => boolean)
+    | null;
+}
+
 interface ToyReactElement {
-  type: string | ToyReactFunctionComponent;
+  type: string | ToyReactFunctionComponent | MemoComponent<any>;
   key: string | number | null;
   props: ToyReactElementProps;
 }
@@ -267,8 +281,19 @@ function performUnitOfWork(wipFiber: Fiber): Fiber | null {
 
 function beginWork(wipFiber: Fiber): Fiber | null {
   const isInitialRender = wipFiber.alternate === null;
+
+  // memo-wrapped components compare props shallowly (or with a custom
+  // comparator); everything else falls back to reference equality
+  const compare = isWrappedInMemo(wipFiber.type)
+    ? (wipFiber.type.compare ?? shallowEqual)
+    : null;
+
   const hasUnchangedProps =
-    !isInitialRender && wipFiber.props === wipFiber.alternate!.props;
+    !isInitialRender &&
+    (compare
+      ? compare(wipFiber.props, wipFiber.alternate!.props)
+      : wipFiber.props === wipFiber.alternate!.props);
+
   const hasPendingWork = wipFiber.lanes !== LANE.NONE;
   const hasPendingWorkBelow = wipFiber.childLanes !== LANE.NONE;
   const hasPendingWorkOnlyBelow = !hasPendingWork && hasPendingWorkBelow;
@@ -285,7 +310,8 @@ function beginWork(wipFiber: Fiber): Fiber | null {
     return wipFiber.child;
   }
 
-  const isFunctionComponent = typeof wipFiber.type === "function";
+  const isFunctionComponent =
+    typeof wipFiber.type === "function" || isWrappedInMemo(wipFiber.type);
   if (isFunctionComponent) {
     updateFunctionComponent(wipFiber);
   } else {
@@ -410,7 +436,11 @@ function markUpdateLaneFromFiberToRoot(fiber: Fiber, lane: Lane): void {
 }
 
 function updateFunctionComponent(wipFiber: Fiber) {
-  if (typeof wipFiber.type !== "function") {
+  const Component = isWrappedInMemo(wipFiber.type)
+    ? wipFiber.type.type
+    : wipFiber.type;
+
+  if (typeof Component !== "function") {
     // shall never happen — performUnitOfWork only dispatches here for function-typed fibers
     throw new Error(
       "updateFunctionComponent called on a fiber whose type is not a function",
@@ -424,7 +454,7 @@ function updateFunctionComponent(wipFiber: Fiber) {
   hookIndex = 0;
   wipFiber.hooks = [];
 
-  const childElements = [wipFiber.type(wipFiber.props)];
+  const childElements = [Component(wipFiber.props)];
   renderingFiber = null;
 
   // build fibers for this fiber's child elements
@@ -933,9 +963,53 @@ export function useState<StateType>(
   return [hook.state as StateType, setState];
 }
 
+export function memo<Props>(
+  Component: (props: Props) => ToyReactElement | boolean | null,
+  compare?: (prevProps: Props, nextProps: Props) => boolean,
+): MemoComponent<Props> {
+  return {
+    type: Component,
+    compare: compare ?? null,
+  } as MemoComponent<Props>;
+}
+
+function isWrappedInMemo(
+  type: ToyReactElement["type"],
+): type is MemoComponent<any> {
+  // a memo-wrapped component is not a function, it's a box containing one (tho an object)
+  return typeof type === "object" && type !== null && "compare" in type;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function shallowEqual(propsA: unknown, propsB: unknown): boolean {
+  if (Object.is(propsA, propsB)) return true;
+  if (!isRecord(propsA) || !isRecord(propsB)) return false;
+
+  // propsA / propsB are still `unknown` inside the .every() closure below
+  // unless captured — const bindings carry the narrowed type across it
+  const propsARecord = propsA;
+  const propsBRecord = propsB;
+
+  const keysA = Object.keys(propsARecord);
+  const keysB = Object.keys(propsBRecord);
+  if (keysA.length !== keysB.length) return false;
+
+  return keysA.every((key) => {
+    const propsBHasOwnKey = propsBRecord.hasOwnProperty(key);
+
+    // cause === lies in NaN === NaN and 0 === -0
+    const valuesMatch = Object.is(propsARecord[key], propsBRecord[key]);
+    return propsBHasOwnKey && valuesMatch;
+  });
+}
+
 // babel compiles jsx into calls to this function, per the pragma
 // configured in tsconfig.json and html.html's transpile step.
 // produces the element tree that render()/performUnitOfWork() consume.
+const EMPTY_CHILDREN: ToyReactElement[] = [];
 
 export function createElement(
   type: ToyReactElement["type"],
@@ -944,22 +1018,26 @@ export function createElement(
 ): ToyReactElement {
   const { key: rawKey = null, ...restProps } = props ?? {};
   const key = toElementKey(rawKey);
+
+  // we need to flatten the array for the case it was something like
+  // <div>
+  //   {groups.map((group) => group.items.map((item) => <span>{item}</span>))}
+  // </div>
+  const normalizedChildren = children
+    .flat(Infinity)
+    .map((child) =>
+      typeof child === "string" || typeof child === "number"
+        ? createTextElement(child)
+        : child,
+    );
+
   return {
     type,
     key,
     props: {
       ...restProps,
-      // we need to flatten the array for the case it was something like
-      // <div>
-      //   {groups.map((group) => group.items.map((item) => <span>{item}</span>))}
-      // </div>
-      children: children
-        .flat(Infinity)
-        .map((child) =>
-          typeof child === "string" || typeof child === "number"
-            ? createTextElement(child)
-            : child,
-        ),
+      children:
+        normalizedChildren.length === 0 ? EMPTY_CHILDREN : normalizedChildren,
     },
   };
 }
