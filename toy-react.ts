@@ -286,13 +286,10 @@ function beginWork(wipFiber: Fiber): Fiber | null {
   // comparator); everything else falls back to reference equality
   const compare = isWrappedInMemo(wipFiber.type)
     ? (wipFiber.type.compare ?? shallowEqual)
-    : null;
+    : Object.is;
 
   const hasUnchangedProps =
-    !isInitialRender &&
-    (compare
-      ? compare(wipFiber.props, wipFiber.alternate!.props)
-      : wipFiber.props === wipFiber.alternate!.props);
+    !isInitialRender && compare(wipFiber.props, wipFiber.alternate!.props);
 
   const hasPendingWork = wipFiber.lanes !== LANE.NONE;
   const hasPendingWorkBelow = wipFiber.childLanes !== LANE.NONE;
