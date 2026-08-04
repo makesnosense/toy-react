@@ -167,8 +167,8 @@ type Lane = ObjectValues<typeof LANE>;
 type Lanes = number;
 
 interface Hook {
-  state: unknown;
-  queue: Array<(prevState: unknown) => unknown>;
+  memoizedState: unknown;
+  queue: Array<(prevState: unknown) => unknown> | null;
 }
 
 let isMessageLoopRunning = false;
@@ -911,14 +911,17 @@ export function useState<StateType>(
   const ownerFiber = renderingFiber;
   const oldHook = renderingFiber.alternate?.hooks?.[hookIndex];
 
-  const hook: Hook = {
-    state: oldHook ? oldHook.state : initialState,
-    queue: [],
+  const queue: Array<(prevState: unknown) => unknown> = [];
+
+  const hook = {
+    memoizedState: oldHook ? oldHook.memoizedState : initialState,
+    queue,
   };
 
-  const pendingActions = oldHook ? oldHook.queue : [];
+  const pendingActions = oldHook?.queue ?? [];
+
   pendingActions.forEach((action) => {
-    hook.state = action(hook.state);
+    hook.memoizedState = action(hook.memoizedState);
   });
 
   const setState = (action: (prevState: StateType) => StateType) => {
@@ -957,7 +960,7 @@ export function useState<StateType>(
   renderingFiber.hooks.push(hook);
   hookIndex++;
 
-  return [hook.state as StateType, setState];
+  return [hook.memoizedState as StateType, setState];
 }
 
 export function memo<Props>(
