@@ -13,6 +13,12 @@ export const waitForRender = () =>
     nodeSetImmediate(resolve);
   });
 
+export async function waitForIdle(): Promise<void> {
+  while (!__isSchedulerIdleForTesting()) {
+    await waitForRender();
+  }
+}
+
 // mounts a fresh dom root for a test, attached to document.body so
 // Node.isConnected reports true, and resets toy-react's internal module
 // state between tests

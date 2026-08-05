@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { setupTest, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForIdle } from "./toy-react.test-utils";
 import * as ToyReact from "./toy-react";
 
 describe("render", () => {
@@ -15,7 +15,7 @@ describe("render", () => {
 
   it("renders nested host elements to the dom", async () => {
     ToyReact.render(<App />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     expect(root.current.querySelector("h1")?.textContent).toBe("hello");
   });
@@ -40,7 +40,7 @@ describe("components and expressions that render nothing", () => {
     }
 
     ToyReact.render(<App />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const outerDiv = root.current.querySelector("div")!;
     expect(
@@ -65,7 +65,7 @@ describe("components and expressions that render nothing", () => {
     }
 
     ToyReact.render(<App />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const outerDiv = root.current.querySelector("div")!;
     // mount, condition false — no stray "false" text node between the spans
@@ -75,7 +75,7 @@ describe("components and expressions that render nothing", () => {
     expect(outerDiv.querySelector("#conditional")).toBeNull();
 
     toggleShown!();
-    await waitForRender();
+    await waitForIdle();
 
     // update, condition true — the conditional element actually mounts
     expect(
@@ -83,7 +83,7 @@ describe("components and expressions that render nothing", () => {
     ).toEqual(["before", "shown", "after"]);
 
     toggleShown!();
-    await waitForRender();
+    await waitForIdle();
 
     // update, condition false again — it's actually removed, not just hidden
     expect(

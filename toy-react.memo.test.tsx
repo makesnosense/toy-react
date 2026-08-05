@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { setupTest, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForIdle } from "./toy-react.test-utils";
 import * as ToyReact from "./toy-react";
 
 describe("memo", () => {
@@ -26,11 +26,11 @@ describe("memo", () => {
     }
 
     ToyReact.render(<Parent />, root.current);
-    await waitForRender();
+    await waitForIdle();
     expect(childRenderCount).toBe(1);
 
     root.current.querySelector<HTMLButtonElement>("#bump")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     // parent re-rendered (count changed) but Child's props didn't
     expect(childRenderCount).toBe(1);
@@ -60,11 +60,11 @@ describe("memo", () => {
     }
 
     ToyReact.render(<Parent />, root.current);
-    await waitForRender();
+    await waitForIdle();
     expect(childRenderCount).toBe(1);
 
     root.current.querySelector<HTMLButtonElement>("#change-label")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     expect(childRenderCount).toBe(2);
     expect(root.current.querySelector("span")!.textContent).toBe("b");
@@ -94,11 +94,11 @@ describe("memo", () => {
     }
 
     ToyReact.render(<Parent />, root.current);
-    await waitForRender();
+    await waitForIdle();
     expect(childRenderCount).toBe(1);
 
     root.current.querySelector<HTMLButtonElement>("#change-label")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     // custom compare only looks at id, which didn't change — bails out
     // even though label did

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { setupTest, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForIdle } from "./toy-react.test-utils";
 import { getByText } from "@testing-library/dom";
 import * as ToyReact from "./toy-react";
 
@@ -43,7 +43,7 @@ describe("list reconciliation with keys", () => {
 
   it("keeps each counter's state attached to its item when the list is reordered", async () => {
     ToyReact.render(<CounterList />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     // click a 4 times
     // click b 2 times
@@ -52,7 +52,7 @@ describe("list reconciliation with keys", () => {
       if (i % 2) counterElementByLabel("b").querySelector("button")!.click();
     }
 
-    await waitForRender();
+    await waitForIdle();
 
     // sanity check before the swap — confirms the clicks landed on the
     // counters we meant, before we go on to reorder them
@@ -64,7 +64,7 @@ describe("list reconciliation with keys", () => {
     ).toBe("2");
 
     root.current.querySelector<HTMLButtonElement>("#swap")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     expect(
       counterElementByLabel("b").querySelector("button")?.textContent,
@@ -113,7 +113,7 @@ describe("list reconciliation with keys, dom order", () => {
 
   it("actually reorders the dom, not just the attached state", async () => {
     ToyReact.render(<CounterList />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const listElement = root.current.querySelector("#list")!;
     const labelsInDomOrder = () =>
@@ -124,7 +124,7 @@ describe("list reconciliation with keys, dom order", () => {
     expect(labelsInDomOrder()).toEqual(["a", "b"]);
 
     root.current.querySelector<HTMLButtonElement>("#swap")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     expect(labelsInDomOrder()).toEqual(["b", "a"]);
   });
@@ -150,7 +150,7 @@ describe("list reconciliation with keys, dom order", () => {
     }
 
     ToyReact.render(<ReorderableList />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const listElement = root.current.querySelector("#list")!;
     const labelsInDomOrder = () =>
@@ -161,7 +161,7 @@ describe("list reconciliation with keys, dom order", () => {
     expect(labelsInDomOrder()).toEqual(["a", "b", "c", "d"]);
 
     root.current.querySelector<HTMLButtonElement>("#reorder")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     expect(labelsInDomOrder()).toEqual(["d", "c", "a", "b"]);
   });

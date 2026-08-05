@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { setupTest, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForIdle } from "./toy-react.test-utils";
 import { getByText } from "@testing-library/dom";
 import * as ToyReact from "./toy-react";
 
@@ -25,7 +25,7 @@ describe("dom insertion order", () => {
 
   it("keeps siblings in order when a nested component's child changes type", async () => {
     ToyReact.render(<App />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const outerDiv = root.current.querySelector("div")!;
     expect(Array.from(outerDiv.children).map((child) => child.tagName)).toEqual(
@@ -33,7 +33,7 @@ describe("dom insertion order", () => {
     );
 
     root.current.querySelector("button")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     expect(Array.from(outerDiv.children).map((child) => child.tagName)).toEqual(
       ["BUTTON", "SPAN", "H2"],
@@ -68,11 +68,11 @@ describe("commit-phase dom lookup through a bailed-out subtree", () => {
 
   it("keeps a bailed-out sibling's dom position correct after a type-changing placement", async () => {
     ToyReact.render(<OuterWrapper />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const em = getByText(root.current, "em-version");
     em.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await waitForRender();
+    await waitForIdle();
 
     const outerDiv = root.current.querySelector("div")!;
     const staticSpan = outerDiv.querySelector("#static-target")!;
@@ -124,7 +124,7 @@ describe("commit-phase reprocessing of untouched siblings", () => {
 
   it("leaves untouched siblings in place when an unrelated deeply-nested update commits", async () => {
     ToyReact.render(<App />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const outerDiv = root.current.querySelector("div")!;
     const first = getByText(root.current, "first");
@@ -132,7 +132,7 @@ describe("commit-phase reprocessing of untouched siblings", () => {
 
     const button = getByText(root.current, "nested: 0");
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await waitForRender();
+    await waitForIdle();
 
     // first/second were never touched by this update — an unrelated
     // update several levels deep in Middle/NestedCounter must not

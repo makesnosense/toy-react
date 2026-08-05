@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { setupTest, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForIdle } from "./toy-react.test-utils";
 import * as ToyReact from "./toy-react";
 
 describe("multiple hooks in one component", () => {
@@ -31,13 +31,13 @@ describe("multiple hooks in one component", () => {
 
   it("keeps each useState call's state independent across updates", async () => {
     ToyReact.render(<Counters />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     expect(root.current.querySelector("#countValue")?.textContent).toBe("0");
     expect(root.current.querySelector("#labelValue")?.textContent).toBe("a");
 
     root.current.querySelector<HTMLButtonElement>("#incrementCount")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     // only count should change here — if hook index tracking were broken,
     // this update could land on label's slot instead
@@ -45,7 +45,7 @@ describe("multiple hooks in one component", () => {
     expect(root.current.querySelector("#labelValue")?.textContent).toBe("a");
 
     root.current.querySelector<HTMLButtonElement>("#cycleLabel")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     expect(root.current.querySelector("#countValue")?.textContent).toBe("1");
     expect(root.current.querySelector("#labelValue")?.textContent).toBe("b");
@@ -75,13 +75,13 @@ describe("multiple components using hooks", () => {
 
   it("keeps state independent across separate instances of the same component", async () => {
     ToyReact.render(<App />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     expect(root.current.querySelector("#first")?.textContent).toBe("0");
     expect(root.current.querySelector("#second")?.textContent).toBe("0");
 
     root.current.querySelector<HTMLButtonElement>("#first")!.click();
-    await waitForRender();
+    await waitForIdle();
 
     // clicking the first counter must not touch the second — each fiber
     // needs its own hooks array, not one shared across the render pass
@@ -102,18 +102,18 @@ describe("repeated updates to the same fiber", () => {
 
   it("keeps counting correctly across three consecutive updates", async () => {
     ToyReact.render(<NestedCounter />, root.current);
-    await waitForRender();
+    await waitForIdle();
 
     const button = root.current.querySelector("button")!;
 
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await waitForRender();
+    await waitForIdle();
 
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await waitForRender();
+    await waitForIdle();
 
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await waitForRender();
+    await waitForIdle();
 
     expect(button.textContent).toBe("nested: 3");
   });
