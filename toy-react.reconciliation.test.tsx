@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createMountedRoot, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForRender } from "./toy-react.test-utils";
 import { getByText } from "@testing-library/dom";
 import * as ToyReact from "./toy-react";
 
 describe("list reconciliation with keys", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function Counter({ label }: { label: string }) {
     const [count, setCount] = ToyReact.useState(0);
@@ -77,7 +77,7 @@ describe("list reconciliation with keys", () => {
 });
 
 describe("list reconciliation with keys, dom order", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function Counter({ label }: { label: string }) {
     const [count, setCount] = ToyReact.useState(0);

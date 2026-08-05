@@ -1064,3 +1064,21 @@ export function createTextElement(child: string | number): ToyReactElement {
     props: { nodeValue: child, children: [] },
   };
 }
+
+// clears all toy-react module state between tests — test-only, never
+// called from application code. exported because the state it resets
+// is otherwise module-private.
+export function __resetInternalStateForTesting(): void {
+  isMessageLoopRunning = false;
+  nextUnitOfWork = null;
+  wipRootFiber = null;
+  committedRootFiber = null;
+  wipRootRenderLanes = LANE.NONE;
+  deletions = [];
+  renderingFiber = null;
+  hookIndex = 0;
+}
+
+export function __isSchedulerIdleForTesting(): boolean {
+  return !isMessageLoopRunning;
+}

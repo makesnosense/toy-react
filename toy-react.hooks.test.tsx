@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createMountedRoot, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForRender } from "./toy-react.test-utils";
 import * as ToyReact from "./toy-react";
 
 describe("multiple hooks in one component", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function Counters() {
     const [count, setCount] = ToyReact.useState(0);
@@ -53,7 +53,7 @@ describe("multiple hooks in one component", () => {
 });
 
 describe("multiple components using hooks", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function Counter({ id }: { id: string }) {
     const [count, setCount] = ToyReact.useState(0);
@@ -91,7 +91,7 @@ describe("multiple components using hooks", () => {
 });
 
 describe("repeated updates to the same fiber", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function NestedCounter() {
     const [count, setCount] = ToyReact.useState(0);

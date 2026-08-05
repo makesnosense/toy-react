@@ -1,4 +1,8 @@
 import { afterEach, beforeEach } from "vitest";
+import {
+  __isSchedulerIdleForTesting,
+  __resetInternalStateForTesting,
+} from "./toy-react";
 
 // one macrotask tick
 export const waitForRender = () =>
@@ -9,10 +13,10 @@ export const waitForRender = () =>
     nodeSetImmediate(resolve);
   });
 
-// a fresh dom node, attached to document.body so Node.isConnected reports
-// true — attached and detached around every test via beforeEach/afterEach,
-// so no test's dom can leak into another
-export function createMountedRoot() {
+// mounts a fresh dom root for a test, attached to document.body so
+// Node.isConnected reports true, and resets toy-react's internal module
+// state between tests
+export function setupTest() {
   let root: HTMLElement;
 
   beforeEach(() => {
@@ -20,8 +24,12 @@ export function createMountedRoot() {
     document.body.appendChild(root);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    while (!__isSchedulerIdleForTesting()) {
+      await waitForRender();
+    }
     root.remove();
+    __resetInternalStateForTesting();
   });
 
   return {

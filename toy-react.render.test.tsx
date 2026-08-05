@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createMountedRoot, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForRender } from "./toy-react.test-utils";
 import * as ToyReact from "./toy-react";
 
 describe("render", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function App() {
     return (
@@ -22,7 +22,7 @@ describe("render", () => {
 });
 
 describe("components and expressions that render nothing", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function Empty() {
     return null;

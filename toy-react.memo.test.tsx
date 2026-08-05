@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createMountedRoot, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForRender } from "./toy-react.test-utils";
 import * as ToyReact from "./toy-react";
 
 describe("memo", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   it("does not re-render when props are shallow-equal", async () => {
     let childRenderCount = 0;

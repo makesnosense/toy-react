@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent } from "@testing-library/dom";
-import { createMountedRoot, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForRender } from "./toy-react.test-utils";
 import * as ToyReact from "./toy-react";
 
 describe("work loop scheduling", () => {
-  const containerA = createMountedRoot();
-  const containerB = createMountedRoot();
+  const containerA = setupTest();
+  const containerB = setupTest();
 
   it("starts the work loop only once, even across multiple renders", async () => {
     const nodeGlobal = globalThis as unknown as {
@@ -71,7 +71,7 @@ describe("work loop scheduling", () => {
 });
 
 describe("setState during an in-progress render", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   it("does not restart in-progress work, and the deferred update still lands", async () => {
     const log: string[] = [];
@@ -135,7 +135,7 @@ describe("setState during an in-progress render", () => {
 });
 
 describe("discrete events interrupt an in-progress render", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   it("discards in-progress work and restarts when a discrete update arrives", async () => {
     const log: string[] = [];
@@ -202,7 +202,7 @@ describe("discrete events interrupt an in-progress render", () => {
 });
 
 describe("two sequential different priority updates before either flushes", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   let triggerLowPriorityUpdate: (() => void) | null = null;
 

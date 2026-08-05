@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createMountedRoot, waitForRender } from "./toy-react.test-utils";
+import { setupTest, waitForRender } from "./toy-react.test-utils";
 import { getByText } from "@testing-library/dom";
 import * as ToyReact from "./toy-react";
 
 describe("dom insertion order", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function ToggleSection({ showAsDiv }: { showAsDiv: boolean }) {
     return showAsDiv ? <div>section</div> : <span>section</span>;
@@ -42,7 +42,7 @@ describe("dom insertion order", () => {
 });
 
 describe("commit-phase dom lookup through a bailed-out subtree", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function StaticBranch() {
     return <span id="static-target">static</span>;
@@ -87,7 +87,7 @@ describe("commit-phase dom lookup through a bailed-out subtree", () => {
 });
 
 describe("commit-phase reprocessing of untouched siblings", () => {
-  const root = createMountedRoot();
+  const root = setupTest();
 
   function StaticFirst() {
     return <div>first</div>;
