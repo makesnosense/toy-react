@@ -115,6 +115,7 @@ interface Fiber {
   flags: number;
   subtreeFlags: number;
   hooks?: Hook[];
+  effects?: Effect[];
   lanes: Lanes;
   childLanes: Lanes;
   parent: Fiber | null;
@@ -145,6 +146,8 @@ const FIBER_FLAG = {
   PLACEMENT: 0b0001,
   UPDATE: 0b0010,
   DELETION: 0b0100,
+  // contast is passive vs. layout
+  PASSIVE_EFFECT: 0b1000,
 } as const;
 
 type FiberFlag = ObjectValues<typeof FIBER_FLAG>;
@@ -169,6 +172,12 @@ type Lanes = number;
 interface Hook {
   memoizedState: unknown;
   queue: Array<(prevState: unknown) => unknown> | null;
+}
+
+interface Effect {
+  create: () => (() => void) | void;
+  destroy: (() => void) | undefined;
+  deps: unknown[] | undefined;
 }
 
 let isMessageLoopRunning = false;
@@ -450,6 +459,7 @@ function updateFunctionComponent(wipFiber: Fiber) {
   renderingFiber = wipFiber;
   hookIndex = 0;
   wipFiber.hooks = [];
+  wipFiber.effects = [];
 
   const childElements = [Component(wipFiber.props)];
   renderingFiber = null;
@@ -707,11 +717,18 @@ function commitRootFiber(): void {
   commitFiber(wipRootFiber.child);
 
   committedRootFiber = wipRootFiber;
+  const rootFiberForPassiveEffects = committedRootFiber;
 
   wipRootFiber = null;
   wipRootRenderLanes = LANE.NONE;
 
+  scheduleWorkUntilDeadline(() => {
+    runPassiveDestroys(rootFiberForPassiveEffects.child);
+    runPassiveCreates(rootFiberForPassiveEffects.child);
+  });
+
   const hasLeftoverWork = committedRootFiber.childLanes !== LANE.NONE;
+
   if (hasLeftoverWork) {
     scheduleNewRootFiber(
       {
@@ -887,6 +904,30 @@ function findAncestorFiberWithDom(fiber: Fiber | null): FiberWithDom {
   return findAncestorFiberWithDom(fiber.parent);
 }
 
+function runPassiveDestroys(fiber: Fiber | null): void {
+  if (!fiber) return;
+
+  if (hasFlag(fiber.flags, FIBER_FLAG.PASSIVE_EFFECT)) {
+    fiber.effects?.forEach((effect) => effect.destroy?.());
+  }
+
+  runPassiveDestroys(fiber.child);
+  runPassiveDestroys(fiber.sibling);
+}
+
+function runPassiveCreates(fiber: Fiber | null): void {
+  if (!fiber) return;
+
+  if (hasFlag(fiber.flags, FIBER_FLAG.PASSIVE_EFFECT)) {
+    fiber.effects?.forEach((effect) => {
+      effect.destroy = effect.create() ?? undefined;
+    });
+  }
+
+  runPassiveCreates(fiber.child);
+  runPassiveCreates(fiber.sibling);
+}
+
 // isolates the lowest set bit — since lane values are ordered smallest =
 // most urgent, this is the highest-priority lane in a merged set
 function getHighestPriorityLane(lanes: Lanes): Lane {
@@ -961,6 +1002,78 @@ export function useState<StateType>(
   hookIndex++;
 
   return [hook.memoizedState as StateType, setState];
+}
+
+export function useEffect(
+  create: () => (() => void) | void,
+  deps?: unknown[],
+): void {
+  if (!renderingFiber) {
+    // shall never happen — useState can only run while a function component
+    // is being invoked, which only happens while renderingFiber is set
+    throw new Error("useEffect called outside of a function component render");
+  }
+
+  if (!renderingFiber.hooks) {
+    // shall never happen — updateFunctionComponent always sets hooks to an
+    // empty array before calling the component function
+    throw new Error("useEffect called on a fiber with no hooks array");
+  }
+
+  if (!renderingFiber.effects) {
+    // shall never happen — updateFunctionComponent always sets effects to an
+    // empty array before calling the component function
+    throw new Error("useEffect called on a fiber with no effects array");
+  }
+
+  const oldHook = renderingFiber.alternate?.hooks?.[hookIndex];
+  // asserting it based on the Rules of Hooks guarantee (same call order every render)
+  const oldEffect = oldHook?.memoizedState as Effect | undefined;
+
+  const isMount = !oldHook;
+  const depsChanged = isMount || haveDepsChanged(oldEffect?.deps, deps);
+
+  if (!depsChanged) {
+    // bail out — carry the previous hook forward untouched. no flag raised,
+    // so this fiber's effect is skipped entirely during commit
+    renderingFiber.hooks.push(oldHook);
+    hookIndex++;
+    return;
+  }
+
+  const effect: Effect = {
+    create,
+    // carries the previous cleanup forward so commit can run it before the
+    // new create — the new create's own destroy isn't known until it runs
+    destroy: oldEffect?.destroy,
+    deps,
+  };
+
+  renderingFiber.hooks.push({ memoizedState: effect, queue: null });
+  renderingFiber.effects.push(effect);
+  renderingFiber.flags |= FIBER_FLAG.PASSIVE_EFFECT;
+  hookIndex++;
+}
+
+function haveDepsChanged(
+  prevDeps: unknown[] | undefined,
+  nextDeps: unknown[] | undefined,
+): boolean {
+  if (prevDeps === undefined || nextDeps === undefined) {
+    return true;
+  }
+
+  if (prevDeps.length !== nextDeps.length) {
+    return true;
+  }
+
+  for (let index = 0; index < prevDeps.length; index++) {
+    if (!Object.is(prevDeps[index], nextDeps[index])) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function memo<Props>(
