@@ -930,6 +930,11 @@ function runPassiveCreates(fiber: Fiber | null): void {
     fiber.effects?.forEach((effect) => {
       effect.destroy = effect.create() ?? undefined;
     });
+
+    // consumed — clear it so a later, unrelated tier-1 bailout on this
+    // fiber (which never re-derives .flags) doesn't see a stale bit and
+    // re-run an effect
+    fiber.flags &= ~FIBER_FLAG.PASSIVE_EFFECT;
   }
 
   runPassiveCreates(fiber.child);

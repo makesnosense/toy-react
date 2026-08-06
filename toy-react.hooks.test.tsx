@@ -138,4 +138,43 @@ describe("useEffect", () => {
 
     expect(effectRan).toBe(true);
   });
+
+  it("does not re-run a stale effect when a memoized ancestor bails out", async () => {
+    let effectRunCount = 0;
+
+    const StaticChild = ToyReact.memo(function StaticChild() {
+      ToyReact.useEffect(() => {
+        effectRunCount++;
+      }, []);
+      return <span>static</span>;
+    });
+
+    const Branch = ToyReact.memo(function Branch() {
+      return <StaticChild />;
+    });
+
+    function App() {
+      const [count, setCount] = ToyReact.useState(0);
+      return (
+        <div>
+          <Branch />
+          <button
+            id="bump"
+            onClick={() => setCount((previous) => previous + 1)}
+          >
+            {count}
+          </button>
+        </div>
+      );
+    }
+
+    ToyReact.render(<App />, root.current);
+    await waitForIdle();
+    expect(effectRunCount).toBe(1);
+
+    root.current.querySelector<HTMLButtonElement>("#bump")!.click();
+    await waitForIdle();
+
+    expect(effectRunCount).toBe(1);
+  });
 });
