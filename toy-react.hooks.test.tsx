@@ -118,3 +118,24 @@ describe("repeated updates to the same fiber", () => {
     expect(button.textContent).toBe("nested: 3");
   });
 });
+
+describe("useEffect", () => {
+  const root = setupTest();
+
+  it("runs the create callback after mount", async () => {
+    let effectRan = false;
+
+    function App() {
+      ToyReact.useEffect(() => {
+        effectRan = true;
+      }, []);
+
+      return <div>hello</div>;
+    }
+
+    ToyReact.render(<App />, root.current);
+    await waitForIdle();
+
+    expect(effectRan).toBe(true);
+  });
+});
