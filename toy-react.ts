@@ -181,6 +181,12 @@ interface Effect {
 }
 
 let isMessageLoopRunning = false;
+// isMessageLoopRunning alone isn't enough to know when it's safe to assert
+// on effects in testing — it goes false as soon as the render loop finishes,
+// before this deferred destroy/create flush (scheduled separately, below)
+// has run. exists purely for __isSchedulerIdleForTesting; no production
+// code reads it.
+let isPassiveEffectsFlushPending = false;
 
 let nextUnitOfWork: Fiber | null = null;
 
@@ -718,6 +724,7 @@ function commitRootFiber(): void {
 
   committedRootFiber = wipRootFiber;
   const rootFiberForPassiveEffects = committedRootFiber;
+  isPassiveEffectsFlushPending = true;
 
   wipRootFiber = null;
   wipRootRenderLanes = LANE.NONE;
@@ -725,6 +732,7 @@ function commitRootFiber(): void {
   scheduleWorkUntilDeadline(() => {
     runPassiveDestroys(rootFiberForPassiveEffects.child);
     runPassiveCreates(rootFiberForPassiveEffects.child);
+    isPassiveEffectsFlushPending = false;
   });
 
   const hasLeftoverWork = committedRootFiber.childLanes !== LANE.NONE;
@@ -1183,6 +1191,7 @@ export function createTextElement(child: string | number): ToyReactElement {
 // is otherwise module-private.
 export function __resetInternalStateForTesting(): void {
   isMessageLoopRunning = false;
+  isPassiveEffectsFlushPending = false;
   nextUnitOfWork = null;
   wipRootFiber = null;
   committedRootFiber = null;
@@ -1193,5 +1202,5 @@ export function __resetInternalStateForTesting(): void {
 }
 
 export function __isSchedulerIdleForTesting(): boolean {
-  return !isMessageLoopRunning;
+  return !isMessageLoopRunning && !isPassiveEffectsFlushPending;
 }
