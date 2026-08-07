@@ -177,4 +177,36 @@ describe("useEffect", () => {
 
     expect(effectRunCount).toBe(1);
   });
+
+  it("runs the cleanup function when the component unmounts", async () => {
+    let cleanupRan = false;
+
+    function Child() {
+      ToyReact.useEffect(() => {
+        return () => {
+          cleanupRan = true;
+        };
+      }, []);
+      return <span>child</span>;
+    }
+
+    function App() {
+      const [shown, setShown] = ToyReact.useState(true);
+      return (
+        <div>
+          <button onClick={() => setShown(() => false)}>hide</button>
+          {shown && <Child />}
+        </div>
+      );
+    }
+
+    ToyReact.render(<App />, root.current);
+    await waitForIdle();
+    expect(cleanupRan).toBe(false);
+
+    root.current.querySelector("button")!.click();
+    await waitForIdle();
+
+    expect(cleanupRan).toBe(true);
+  });
 });

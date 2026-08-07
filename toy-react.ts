@@ -717,6 +717,7 @@ function updateDom(
 function commitRootFiber(): void {
   if (!wipRootFiber) return;
 
+  const deletedFibers = deletions; // snapshot for cleanup effects
   deletions.forEach(commitFiberDeletion);
   deletions = [];
 
@@ -730,6 +731,7 @@ function commitRootFiber(): void {
   wipRootRenderLanes = LANE.NONE;
 
   scheduleWorkUntilDeadline(() => {
+    deletedFibers.forEach(runPassiveDestroysForDeletedFiber);
     runPassiveDestroys(rootFiberForPassiveEffects.child);
     runPassiveCreates(rootFiberForPassiveEffects.child);
     isPassiveEffectsFlushPending = false;
@@ -939,6 +941,18 @@ function runPassiveCreates(fiber: Fiber | null): void {
 
   runPassiveCreates(fiber.child);
   runPassiveCreates(fiber.sibling);
+}
+
+// runs cleanup for every effect anywhere in a fiber subtree that's being
+// deleted wholesale — the fiber itself plus everything below it
+function runPassiveDestroysForDeletedFiber(fiber: Fiber): void {
+  fiber.effects?.forEach((effect) => effect.destroy?.());
+
+  let childFiber = fiber.child;
+  while (childFiber) {
+    runPassiveDestroysForDeletedFiber(childFiber);
+    childFiber = childFiber.sibling;
+  }
 }
 
 // isolates the lowest set bit — since lane values are ordered smallest =
