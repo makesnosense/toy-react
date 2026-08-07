@@ -1064,6 +1064,7 @@ export function useEffect(
     // bail out — carry the previous hook forward untouched. no flag raised,
     // so this fiber's effect is skipped entirely during commit
     renderingFiber.hooks.push(oldHook);
+    renderingFiber.effects.push(oldHook.memoizedState as Effect);
     hookIndex++;
     return;
   }

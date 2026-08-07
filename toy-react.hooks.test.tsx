@@ -209,4 +209,48 @@ describe("useEffect", () => {
 
     expect(cleanupRan).toBe(true);
   });
+
+  it("runs the cleanup function on unmount even after an intervening no-op render", async () => {
+    let cleanupRan = false;
+
+    function Child() {
+      ToyReact.useEffect(() => {
+        return () => {
+          cleanupRan = true;
+        };
+      }, []);
+      return <span>child</span>;
+    }
+
+    function App() {
+      const [shown, setShown] = ToyReact.useState(true);
+      const [, forceRerender] = ToyReact.useState(0);
+
+      return (
+        <div>
+          <button id="rerender" onClick={() => forceRerender((n) => n + 1)}>
+            rerender
+          </button>
+          <button id="hide" onClick={() => setShown(() => false)}>
+            hide
+          </button>
+          {shown && <Child />}
+        </div>
+      );
+    }
+
+    ToyReact.render(<App />, root.current);
+    await waitForIdle();
+
+    // App re-renders with Child's deps unchanged — this is the render that
+    // leaves Child.effects at [] per the bailout branch in useEffect
+    root.current.querySelector<HTMLButtonElement>("#rerender")!.click();
+    await waitForIdle();
+    expect(cleanupRan).toBe(false);
+
+    root.current.querySelector<HTMLButtonElement>("#hide")!.click();
+    await waitForIdle();
+
+    expect(cleanupRan).toBe(true);
+  });
 });
