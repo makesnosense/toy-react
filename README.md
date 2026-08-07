@@ -41,6 +41,23 @@ What problem min-heaps in real React solve:
 - high-prio tasks can jump ahead of already scheduled effect callback, but only before effect callback started executing
 - the heap (specifically `timerQueue`) solves: delayed work that isn't eligible to run yet
 
+**Reconciliation**
+
+**Toy React always builds a map** – `reconcileChildFibers` builds a `Map` of
+old children by key before comparing anything, on every reconciliation.
+Real React's `reconcileChildrenArray` walks both lists side by side by
+position first, comparing keys directly — no `Map` involved. If every
+position lines up, it's done, cheaply. The moment one position doesn't
+match, it stops that walk and switches strategy: builds a `Map` of
+whatever old fibers are left, then looks up each remaining new child in
+it by key.
+
+What problem the forward-scan fast path solves:
+
+- the common case — a list re-rendering with the same items in the same
+  order — never touches a `Map` at all in real React; Toy React pays for
+  one on every reconciliation regardless
+
 ## Credit
 
 Structurally based on [pomber/didact](https://github.com/pomber/didact)
